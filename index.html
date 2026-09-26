@@ -1,0 +1,1073 @@
+<!doctype html>
+<!--
+  UTZLINE $ Summary -- a NEW, SEPARATE, standalone app in the UTZLINE
+  family. Requested directly by Andrew (2026-09-26):
+
+    "lets build a $ summary app, this can show month by month dollar
+    values per project, forecasts and delivered / installed. with an
+    export to excel button for selected months. this can project 12
+    months ahead of todays date."
+
+  Followed by (all captured via AskUserQuestion before building):
+    - Build now with PLACEHOLDER/sample data, rather than waiting for the
+      real `dollarValue` field to land on joinery items in UTZLINE
+      Projects (see NEXT_RUN_NOTES.md item 14, still queued/unbuilt).
+    - "delivered" brings an item's dollar value to 75%, "installed" brings
+      it to 100% -- progress-claims-style earned value.
+    - New standalone PWA (matches how Scheduler/Machine Schedule/Solid
+      Surface Schedule were each stood up), not a screen inside Projects.
+    - Both a single-project drill-down AND an "all projects" combined
+      view, each project listed with its own dollar value, Project
+      Manager and Builder.
+    - Mid-turn additions: "it will also show total dollar values for all
+      projects per month" (a company-wide monthly total) and "it will
+      also have sexy looking charts" (the dataviz-skill-driven chart
+      below).
+
+  ****************************************************************
+  * THIS IS A FIRST PASS BUILT AGAINST PLACEHOLDER DATA.          *
+  * SAMPLE_PROJECTS below (deterministically generated, not read  *
+  * from any real Projects-root folder) stands in for real data   *
+  * until UTZLINE Projects gets a real `dollarValue` field on      *
+  * joinery items (NEXT_RUN_NOTES.md item 14). Swapping in real    *
+  * data later means writing a Projects-root reader that produces  *
+  * the exact same shape this file already consumes -- see the     *
+  * "DATA MODEL" section below for exactly what that shape is.     *
+  ****************************************************************
+
+  DATA MODEL this app is built against (so a later real-data reader has an
+  exact target to hit):
+    project = { no, name, contractor (="Builder" in the UI), projectManager,
+                items: [ item, ... ] }
+    item    = { joineryId, description, dollarValue (number),
+                status ("created"|"measured"|"in_manufacture"|"machined"|
+                        "manufactured"|"delivered"|"installed"),
+                requiredDeliveryDate ("YYYY-MM-DD") }
+  This mirrors real, already-existing fields: project-meta.json's
+  {no, name, contractor, projectManager} (UTZLINE Projects,
+  readProjectMeta/writeProjectMeta), joinery-items.json's per-item
+  {joineryId, description}, the shared joinery-status.json pipeline's
+  status strings, and joinery-schedule.json's requiredDeliveryDate. Only
+  `dollarValue` has no real source yet.
+
+  EARNED-VALUE LOGIC (per Andrew's answer above): every item's dollarValue
+  is counted in exactly one of three lenses for whichever month its
+  requiredDeliveryDate falls in --
+    Forecast   = full dollarValue, regardless of status (the planned/
+                 contracted value for that month -- this is what every
+                 item scheduled for a month is "worth" once it ships)
+    Delivered  = dollarValue * 0.75, only for items whose status is
+                 exactly "delivered" (not yet installed)
+    Installed  = dollarValue * 1.00, only for items whose status is
+                 "installed"
+  These are three distinct lenses on the SAME underlying scheduled value,
+  never summed together (summing would double-count -- see the chart and
+  table below, which always render them as separate series/columns, never
+  a combined total column).
+
+  Accent color: gold/money (#caa025) -- distinct from every sibling app's
+  own accent (Site Measure/Viewer orange-red, Install ITP green,
+  Manufacture ITP purple, Delivery ITP amber #b8791a, Projects crimson,
+  Scheduler blue/teal, Machine Schedule teal, Solid Surface Schedule
+  indigo).
+
+  CHART: built per the dataviz skill's procedure (form before color,
+  color validated with scripts/validate_palette.js before use, mark specs,
+  hover layer, accessibility pass). Job = "trend over time" + "tell 3
+  distinct series apart" -> a multi-line chart, categorical color, in the
+  skill's own fixed slot order (slot1 blue/Forecast, slot2 orange/
+  Delivered, slot3 aqua/Installed -- the reference palette's own 3-series
+  "first three slots validate all-pairs in both modes" safe zone). Palette
+  validated against this app's own dark chart surface (#1a1a19, the
+  skill's own reference dark surface) with
+  `node scripts/validate_palette.js "#3987e5,#d95926,#199e70" --mode dark
+  --surface "#1a1a19"` -- ALL CHECKS PASS (worst adjacent CVD Delta E 9.4,
+  worst normal-vision Delta E 26.5, all >=3:1 contrast). Hand-rolled inline
+  SVG (no charting library) to match this family's offline-PWA,
+  vendor-everything-locally convention -- 2px lines, round joins, >=8px
+  ringed markers, hairline recessive gridlines, a legend (always present
+  for 3 series) with line-key swatches (never boxes, per marks-and-anatomy
+  .md), and a crosshair + one-tooltip-for-all-series hover layer (values
+  bold and leading, series name secondary, per interaction.md).
+
+  EXPORT TO EXCEL: SheetJS (xlsx.full.min.js v0.18.5, Apache-2.0),
+  vendored locally at vendor/xlsx.full.min.js -- same pattern this family
+  already uses for every other vendored library (pdf.js, etc). "Export
+  selected months" builds a workbook from exactly the ticked month
+  columns, one sheet per project plus an "All projects" summary sheet,
+  entirely client-side, no network call.
+
+  Andrew's own precedent for why this is a brand-new, separate app
+  (Scheduler's own top-of-file comment, 2026-09-23): "Do not change any
+  other apps. they are all working, just build the standalone [app]." Does
+  NOT touch source.html, Projects, or any ITP/Scheduler app in any way.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>UTZLINE $ Summary</title>
+<meta name="theme-color" content="#161209">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icons/icon-192.png">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<style>
+  :root{
+    --bg: #161209;
+    --panel: #201a0f;
+    --panel2: #281f12;
+    --border: #3a3018;
+    --text: #f7f2e6;
+    --muted: #c3b696;
+    --muted2: #8f8267;
+    --accent: #caa025;
+    --accent-ink: #1b1608;
+    --accent-soft: #2c2308;
+    --danger: #ff5d5d;
+    --warn: #e0a12c;
+    --ok: #33c46a;
+    --radius: 12px;
+    /* chart tokens -- validated dark palette (see top-of-file comment) */
+    --chart-surface: #1a1a19;
+    --chart-ink: #ffffff;
+    --chart-ink-secondary: #c3c2b7;
+    --chart-muted: #898781;
+    --chart-grid: #2c2c2a;
+    --chart-baseline: #383835;
+    --series-forecast: #3987e5;
+    --series-delivered: #d95926;
+    --series-installed: #199e70;
+  }
+  *{ box-sizing: border-box; }
+  [hidden]{ display: none !important; }
+  html, body{ height: 100%; }
+  body{
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Roboto, "IBM Plex Sans", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+  }
+  header{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    background: #120f07;
+    flex: 0 0 auto;
+  }
+  header img{ width: 32px; height: 32px; border-radius: 8px; }
+  header .brand{ font-weight: 700; font-size: 17px; letter-spacing: 0.2px; }
+  header .brand small{ display:block; font-weight: 500; font-size: 11px; color: var(--muted); letter-spacing: 0.5px; }
+  main{
+    flex: 1 1 auto;
+    overflow-y: auto;
+    display: flex;
+    justify-content: center;
+    padding: 24px 16px 60px;
+  }
+  .screen{ width: 100%; max-width: 980px; }
+  .screen[hidden]{ display: none; }
+  .screen.wide{ max-width: 1180px; }
+  h1{ font-size: 20px; margin: 0 0 6px; }
+  h2{ font-size: 16px; margin: 0 0 4px; }
+  p.sub{ color: var(--muted); margin: 0 0 20px; font-size: 14px; line-height: 1.5; }
+  .card{
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    margin-bottom: 14px;
+  }
+  .btn{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    border: none;
+    border-radius: 10px;
+    padding: 11px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .btn, .list-item, th, select, input{ touch-action: manipulation; }
+  .btn, .list-item, th{ -webkit-user-select: none; user-select: none; }
+  .btn:hover{ filter: brightness(1.1); }
+  .btn:disabled{ opacity: 0.5; cursor: not-allowed; filter:none; }
+  .btn.secondary{
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn.secondary:hover{ background: var(--panel2); }
+  .btn.link{
+    background: transparent;
+    color: var(--muted);
+    border: none;
+    padding: 6px 0;
+    font-size: 13px;
+    text-decoration: underline;
+  }
+  .btn.sm{ padding: 6px 10px; font-size: 12px; border-radius: 8px; }
+  .row{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .backrow{ margin-bottom: 16px; }
+  .list{ display: flex; flex-direction: column; gap: 8px; }
+  .list-item{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 13px 16px;
+    cursor: pointer;
+    text-align: left;
+    color: var(--text);
+    font-size: 15px;
+    width: 100%;
+  }
+  .list-item:hover{ background: var(--panel2); border-color: var(--accent); }
+  .list-item .chev{ color: var(--muted2); }
+  .li-main{ display:flex; flex-direction:column; gap:2px; }
+  .li-title{ font-weight:600; }
+  .li-sub{ font-size:12px; color:var(--muted); }
+  .li-value{ font-weight:700; font-variant-numeric: tabular-nums; color: var(--accent); font-size:16px; white-space:nowrap; }
+  .empty-note{ color: var(--muted); font-size: 14px; padding: 18px 4px; text-align: center; }
+  .section-title{ font-size: 15px; margin: 0 0 8px; }
+
+  /* stat tiles */
+  .stat-row{ display:flex; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+  .stat-tile{
+    flex: 1 1 200px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+  }
+  .stat-tile .stat-label{ font-size:12px; color:var(--muted); margin-bottom:6px; }
+  .stat-tile .stat-value{ font-size:22px; font-weight:700; font-variant-numeric: normal; }
+  .stat-tile.forecast .stat-value{ color: var(--series-forecast); }
+  .stat-tile.delivered .stat-value{ color: var(--series-delivered); }
+  .stat-tile.installed .stat-value{ color: var(--series-installed); }
+
+  /* table */
+  .table-scroll{ overflow-x:auto; -webkit-overflow-scrolling:touch; touch-action: pan-x pan-y; }
+  table.data{
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 640px;
+    font-size: 13px;
+  }
+  table.data th, table.data td{
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    white-space: nowrap;
+  }
+  table.data th{
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    position: sticky;
+    top: 0;
+    background: var(--panel);
+  }
+  table.data td.num{ text-align:right; font-variant-numeric: tabular-nums; }
+  table.data tr.total-row td{ font-weight:700; border-top: 2px solid var(--border); background: var(--panel2); }
+  table.data tr:hover td{ background: rgba(202,160,37,0.06); }
+  table.data td.chk{ text-align:center; }
+  table.data input[type="checkbox"]{ width:16px; height:16px; accent-color: var(--accent); cursor:pointer; }
+
+  /* chart */
+  .chart-card{ background: var(--chart-surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+  .chart-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom: 6px; flex-wrap: wrap; }
+  .chart-legend{ display:flex; gap:16px; flex-wrap:wrap; }
+  .legend-item{ display:flex; align-items:center; gap:6px; font-size:13px; color: var(--chart-ink-secondary); }
+  .legend-key{ width:18px; height:0; border-top: 2px solid; display:inline-block; }
+  .chart-wrap{ position:relative; }
+  .chart-tooltip{
+    position:absolute;
+    pointer-events:none;
+    background: #0d0d0c;
+    border: 1px solid var(--chart-grid);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 12px;
+    color: var(--chart-ink-secondary);
+    min-width: 150px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+    z-index: 5;
+    transform: translate(-50%, -110%);
+    white-space: nowrap;
+  }
+  .chart-tooltip .tt-month{ color: var(--chart-ink); font-weight:700; margin-bottom:4px; }
+  .chart-tooltip .tt-row{ display:flex; align-items:center; gap:6px; margin-top:2px; }
+  .chart-tooltip .tt-row .k{ width:12px; height:0; border-top:2px solid; display:inline-block; }
+  .chart-tooltip .tt-row .v{ font-weight:700; color: var(--chart-ink); margin-left:auto; padding-left:10px; }
+
+  /* month picker */
+  .month-picker{ display:flex; flex-wrap:wrap; gap:8px; margin: 10px 0 4px; }
+  .month-chip{
+    display:flex; align-items:center; gap:6px;
+    background: var(--panel2); border:1px solid var(--border); border-radius:8px;
+    padding: 6px 10px; font-size:12px; cursor:pointer; user-select:none;
+  }
+  .month-chip input{ accent-color: var(--accent); cursor:pointer; }
+  .month-chip.all{ font-weight:600; }
+
+  footer.app-foot{ text-align:center; color: var(--muted2); font-size:11px; padding: 10px 0 4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <img src="./icons/icon-192.png" alt="">
+  <div class="brand">UTZLINE $ Summary<small>Month-by-month dollar values, forecasts, delivered &amp; installed</small></div>
+</header>
+
+<main>
+
+  <!-- HOME -->
+  <section class="screen" id="screenHome">
+    <h1>$ Summary</h1>
+    <p class="sub">Month-by-month dollar values per project — forecast, delivered (75%) and installed (100%) — projecting 12 months ahead of today. Built against <strong>placeholder sample data</strong>; see the note on the All Projects screen for what changes once real dollar values land in UTZLINE Projects.</p>
+
+    <div class="card">
+      <button class="list-item" id="openAllProjectsBtn" style="margin-bottom:0;">
+        <div class="li-main">
+          <span class="li-title">All projects</span>
+          <span class="li-sub">Combined view — every project, company-wide monthly totals, export</span>
+        </div>
+        <span class="chev">›</span>
+      </button>
+    </div>
+
+    <h2 class="section-title">Projects</h2>
+    <div class="list" id="projectList"></div>
+  </section>
+
+  <!-- ALL PROJECTS -->
+  <section class="screen wide" id="screenAll" hidden>
+    <div class="row backrow">
+      <button class="btn secondary sm" data-nav="home">‹ Home</button>
+    </div>
+    <h1>All projects</h1>
+    <p class="sub">Every project's total contract value, plus a company-wide month-by-month breakdown. Forecast, Delivered and Installed are separate lenses on the same scheduled value and are never summed into one total.</p>
+
+    <div class="stat-row" id="allStatRow"></div>
+
+    <div class="chart-card">
+      <div class="chart-head">
+        <h2>Company-wide monthly value</h2>
+        <div class="chart-legend" id="allChartLegend"></div>
+      </div>
+      <div class="chart-wrap" id="allChartWrap"></div>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">Projects</h2>
+      <div class="table-scroll">
+        <table class="data" id="allProjectsTable">
+          <thead>
+            <tr>
+              <th>Job #</th><th>Project</th><th>Builder</th><th>Project manager</th>
+              <th class="num">Contract value</th>
+              <th class="num">Delivered to date</th>
+              <th class="num">Installed to date</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between;">
+        <h2 class="section-title" style="margin-bottom:0;">Company-wide monthly breakdown (next 12 months)</h2>
+        <button class="btn sm" id="exportAllBtn">Export selected months to Excel</button>
+      </div>
+      <div class="month-picker" id="allMonthPicker"></div>
+      <div class="table-scroll">
+        <table class="data" id="allMonthlyTable">
+          <thead>
+            <tr><th></th><th>Month</th><th class="num">Forecast</th><th class="num">Delivered (75%)</th><th class="num">Installed (100%)</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROJECT DETAIL -->
+  <section class="screen wide" id="screenProject" hidden>
+    <div class="row backrow">
+      <button class="btn secondary sm" data-nav="home">‹ Home</button>
+      <button class="btn secondary sm" data-nav="all">All projects</button>
+    </div>
+    <h1 id="projTitle">Project</h1>
+    <p class="sub" id="projSub"></p>
+
+    <div class="stat-row" id="projStatRow"></div>
+
+    <div class="chart-card">
+      <div class="chart-head">
+        <h2>Monthly value</h2>
+        <div class="chart-legend" id="projChartLegend"></div>
+      </div>
+      <div class="chart-wrap" id="projChartWrap"></div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between;">
+        <h2 class="section-title" style="margin-bottom:0;">Monthly breakdown (next 12 months)</h2>
+        <button class="btn sm" id="exportProjBtn">Export selected months to Excel</button>
+      </div>
+      <div class="month-picker" id="projMonthPicker"></div>
+      <div class="table-scroll">
+        <table class="data" id="projMonthlyTable">
+          <thead>
+            <tr><th></th><th>Month</th><th class="num">Forecast</th><th class="num">Delivered (75%)</th><th class="num">Installed (100%)</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">Joinery items</h2>
+      <div class="table-scroll">
+        <table class="data" id="projItemsTable">
+          <thead>
+            <tr><th>Joinery ID</th><th>Description</th><th>Required delivery</th><th>Status</th><th class="num">Dollar value</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+</main>
+<footer class="app-foot">UTZLINE $ Summary — placeholder sample data, v1</footer>
+
+<script src="./vendor/xlsx.full.min.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  /* ============================================================
+   * PLACEHOLDER SAMPLE DATA
+   * Deterministic (seeded) so it looks the same every time the app
+   * opens, rather than reshuffling on every reload. Replace this
+   * whole block with a real Projects-root reader once dollarValue
+   * is a real field (NEXT_RUN_NOTES.md item 14) -- everything below
+   * this block consumes only the DATA MODEL documented at the top
+   * of the file, and does not care where it came from.
+   * ============================================================ */
+
+  function mulberry32(seed){
+    return function(){
+      seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+      var t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function fmtDate(d){
+    var y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,"0"), day = String(d.getDate()).padStart(2,"0");
+    return y + "-" + m + "-" + day;
+  }
+
+  var STATUS_PIPELINE = ["created","measured","in_manufacture","machined","manufactured","delivered","installed"];
+  var STATUS_LABEL = {
+    created:"Created", measured:"Measured", in_manufacture:"In manufacture",
+    machined:"Machined", manufactured:"Manufactured", delivered:"Delivered", installed:"Installed"
+  };
+
+  var PROJECT_SEEDS = [
+    { no:"24-118", name:"Meadowbrook Residence",        contractor:"Corelli Construction",  projectManager:"Sarah Nguyen",  itemCount:11, seed:1001, minVal:2200,  maxVal:9800,  startOffsetMonths:-3 },
+    { no:"24-142", name:"Riverside Apartments Blk C",    contractor:"Anvex Build Group",     projectManager:"Marcus Webb",   itemCount:16, seed:2002, minVal:1800,  maxVal:8600,  startOffsetMonths:-2 },
+    { no:"25-003", name:"Harborview Offices",            contractor:"Solstice Projects",     projectManager:"Priya Raman",   itemCount:13, seed:3003, minVal:3200,  maxVal:16500, startOffsetMonths:-1 },
+    { no:"25-027", name:"Old Mill Boutique Hotel",       contractor:"Corelli Construction",  projectManager:"Sarah Nguyen",  itemCount:14, seed:4004, minVal:2600,  maxVal:12400, startOffsetMonths:0 },
+    { no:"25-055", name:"Fernwood Aged Care",             contractor:"Anvex Build Group",     projectManager:"Declan Ho",     itemCount:12, seed:5005, minVal:2000,  maxVal:9200,  startOffsetMonths:0 },
+    { no:"25-071", name:"Northgate Retail Fitout",       contractor:"Solstice Projects",     projectManager:"Priya Raman",   itemCount:9,  seed:6006, minVal:1500,  maxVal:7000,  startOffsetMonths:1 }
+  ];
+
+  var TODAY = new Date(); TODAY.setHours(0,0,0,0);
+
+  function buildSampleProjects(){
+    return PROJECT_SEEDS.map(function(seedDef){
+      var rnd = mulberry32(seedDef.seed);
+      var items = [];
+      for (var i = 0; i < seedDef.itemCount; i++){
+        var joineryId = "J." + seedDef.no.slice(-3) + "." + String(i+1).padStart(3,"0");
+        var rooms = ["Kitchen","Bathroom","Laundry","Robe","Study","Reception","Bar","Vanity","Pantry","Ensuite"];
+        var description = rooms[i % rooms.length] + " joinery";
+        var dollarValue = Math.round((seedDef.minVal + rnd() * (seedDef.maxVal - seedDef.minVal)) / 50) * 50;
+
+        // Spread required delivery dates from a few months in the past
+        // (already progressed) out to +11 months from today (forecast-only).
+        var monthOffset = Math.floor(seedDef.startOffsetMonths + rnd() * 13); // roughly -3..+10 range depending on project
+        var day = 3 + Math.floor(rnd() * 24);
+        var due = new Date(TODAY.getFullYear(), TODAY.getMonth() + monthOffset, day);
+
+        // Status derived from how far past/future the due date is, using a
+        // smooth tapering probability rather than hard day thresholds --
+        // real projects run some items ahead of schedule (already
+        // delivered/installed even though their required delivery date is
+        // still a few months out), so Delivered/Installed have a genuine,
+        // gradually-tapering presence across most of the 12-month forward
+        // window instead of only showing up in month 1-2 and flatlining at
+        // zero for the rest of the year.
+        var daysFromToday = Math.round((due - TODAY) / 86400000);
+        var pInstalled = Math.max(0.03, Math.min(0.92, 0.85 - daysFromToday / 220));
+        var pDeliveredIfNotInstalled = Math.max(0.05, Math.min(0.55, 0.5 - daysFromToday / 320));
+        var status;
+        if (rnd() < pInstalled){
+          status = "installed";
+        } else if (rnd() < pDeliveredIfNotInstalled){
+          status = "delivered";
+        } else if (daysFromToday < 30){
+          status = rnd() < 0.5 ? "manufactured" : "machined";
+        } else if (daysFromToday < 90){
+          status = rnd() < 0.5 ? "in_manufacture" : "manufactured";
+        } else {
+          status = rnd() < 0.5 ? "created" : "measured";
+        }
+
+        items.push({
+          joineryId: joineryId,
+          description: description,
+          dollarValue: dollarValue,
+          status: status,
+          requiredDeliveryDate: fmtDate(due)
+        });
+      }
+      return {
+        no: seedDef.no,
+        name: seedDef.name,
+        contractor: seedDef.contractor,
+        projectManager: seedDef.projectManager,
+        items: items
+      };
+    });
+  }
+
+  var PROJECTS = buildSampleProjects();
+
+  /* ============================================================
+   * MONTH WINDOW -- computed dynamically from "today" every time
+   * the app opens, never hardcoded, so it stays correct as time
+   * passes. 12 months starting with the current month.
+   * ============================================================ */
+  var MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  function buildMonthWindow(){
+    var months = [];
+    var base = new Date(TODAY.getFullYear(), TODAY.getMonth(), 1);
+    for (var i = 0; i < 12; i++){
+      var d = new Date(base.getFullYear(), base.getMonth() + i, 1);
+      months.push({
+        key: d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0"),
+        label: MONTH_NAMES[d.getMonth()] + " " + d.getFullYear(),
+        shortLabel: MONTH_NAMES[d.getMonth()] + " '" + String(d.getFullYear()).slice(2),
+        year: d.getFullYear(), month: d.getMonth()
+      });
+    }
+    return months;
+  }
+  var MONTHS = buildMonthWindow();
+  function monthKeyOf(dateStr){
+    return dateStr.slice(0,7);
+  }
+
+  /* ============================================================
+   * EARNED-VALUE AGGREGATION
+   * ============================================================ */
+  function emptyMonthlyBuckets(){
+    var m = {};
+    MONTHS.forEach(function(mo){ m[mo.key] = { forecast:0, delivered:0, installed:0 }; });
+    return m;
+  }
+
+  function aggregateProject(project){
+    var buckets = emptyMonthlyBuckets();
+    var totals = { contract:0, deliveredToDate:0, installedToDate:0 };
+    project.items.forEach(function(item){
+      var key = monthKeyOf(item.requiredDeliveryDate);
+      totals.contract += item.dollarValue;
+      if (item.status === "installed"){ totals.installedToDate += item.dollarValue; }
+      else if (item.status === "delivered"){ totals.deliveredToDate += item.dollarValue * 0.75; }
+      if (!buckets[key]) return; // outside the 12-month window
+      buckets[key].forecast += item.dollarValue;
+      if (item.status === "delivered"){
+        buckets[key].delivered += item.dollarValue * 0.75;
+      } else if (item.status === "installed"){
+        buckets[key].installed += item.dollarValue;
+      }
+    });
+    return { buckets: buckets, totals: totals };
+  }
+
+  var PROJECT_AGG = {}; // no -> {buckets, totals}
+  PROJECTS.forEach(function(p){ PROJECT_AGG[p.no] = aggregateProject(p); });
+
+  var COMPANY_BUCKETS = emptyMonthlyBuckets();
+  Object.keys(PROJECT_AGG).forEach(function(no){
+    var b = PROJECT_AGG[no].buckets;
+    MONTHS.forEach(function(mo){
+      COMPANY_BUCKETS[mo.key].forecast += b[mo.key].forecast;
+      COMPANY_BUCKETS[mo.key].delivered += b[mo.key].delivered;
+      COMPANY_BUCKETS[mo.key].installed += b[mo.key].installed;
+    });
+  });
+
+  /* ============================================================
+   * FORMATTING
+   * ============================================================ */
+  function money(n){
+    return "$" + Math.round(n).toLocaleString("en-US");
+  }
+  function moneyCompact(n){
+    var abs = Math.abs(n);
+    if (abs >= 1000000) return "$" + (n/1000000).toFixed(1).replace(/\.0$/,"") + "M";
+    if (abs >= 1000) return "$" + (n/1000).toFixed(0) + "K";
+    return "$" + Math.round(n);
+  }
+
+  /* ============================================================
+   * NAVIGATION
+   * ============================================================ */
+  var screens = {
+    home: document.getElementById("screenHome"),
+    all: document.getElementById("screenAll"),
+    project: document.getElementById("screenProject")
+  };
+  function showScreen(name){
+    Object.keys(screens).forEach(function(k){ screens[k].hidden = (k !== name); });
+    window.scrollTo(0,0);
+  }
+  document.querySelectorAll("[data-nav]").forEach(function(btn){
+    btn.addEventListener("click", function(){ showScreen(btn.getAttribute("data-nav")); });
+  });
+
+  /* ============================================================
+   * CHART -- hand-rolled inline SVG multi-line chart, per the
+   * dataviz skill: 2px lines/round joins, >=8px ringed markers,
+   * hairline recessive gridlines, legend with line-key swatches,
+   * crosshair + one shared tooltip. Palette validated (see
+   * top-of-file comment).
+   * ============================================================ */
+  var SERIES_DEFS = [
+    { key:"forecast",  label:"Forecast",         color:"var(--series-forecast)"  },
+    { key:"delivered", label:"Delivered (75%)",  color:"var(--series-delivered)" },
+    { key:"installed", label:"Installed (100%)", color:"var(--series-installed)" }
+  ];
+
+  function niceMax(v){
+    if (v <= 0) return 1000;
+    var mag = Math.pow(10, Math.floor(Math.log10(v)));
+    var norm = v / mag;
+    var step;
+    if (norm <= 1) step = 1;
+    else if (norm <= 2) step = 2;
+    else if (norm <= 5) step = 5;
+    else step = 10;
+    return step * mag * 1.0;
+  }
+
+  function renderLegend(container){
+    container.innerHTML = "";
+    SERIES_DEFS.forEach(function(s){
+      var el = document.createElement("div");
+      el.className = "legend-item";
+      var key = document.createElement("span");
+      key.className = "legend-key";
+      key.style.borderColor = s.color;
+      var lbl = document.createElement("span");
+      lbl.textContent = s.label;
+      el.appendChild(key); el.appendChild(lbl);
+      container.appendChild(el);
+    });
+  }
+
+  var SVG_NS = "http://www.w3.org/2000/svg";
+  function svgEl(tag, attrs){
+    var el = document.createElementNS(SVG_NS, tag);
+    for (var k in attrs){ el.setAttribute(k, attrs[k]); }
+    return el;
+  }
+
+  function renderLineChart(wrapEl, buckets){
+    wrapEl.innerHTML = "";
+    var W = 960, H = 320;
+    var padL = 56, padR = 16, padT = 16, padB = 34;
+    var plotW = W - padL - padR, plotH = H - padT - padB;
+
+    var values = MONTHS.map(function(mo){ return buckets[mo.key]; });
+    var maxRaw = 0;
+    values.forEach(function(v){ maxRaw = Math.max(maxRaw, v.forecast, v.delivered, v.installed); });
+    var yMax = niceMax(maxRaw || 1000);
+    var tickCount = 4;
+
+    var svg = svgEl("svg", { viewBox:"0 0 " + W + " " + H, role:"img",
+      "aria-label":"Monthly forecast, delivered and installed value over the next 12 months" });
+    svg.style.width = "100%";
+    svg.style.height = "auto";
+    svg.style.display = "block";
+
+    function xFor(i){ return padL + (MONTHS.length === 1 ? plotW/2 : (i/(MONTHS.length-1)) * plotW); }
+    function yFor(v){ return padT + plotH - (v / yMax) * plotH; }
+
+    // gridlines + y ticks
+    for (var t = 0; t <= tickCount; t++){
+      var val = (yMax / tickCount) * t;
+      var y = yFor(val);
+      svg.appendChild(svgEl("line", { x1:padL, x2:W-padR, y1:y, y2:y, stroke:"var(--chart-grid)", "stroke-width":"1" }));
+      var lbl = svgEl("text", { x:padL-8, y:y+4, "text-anchor":"end", "font-size":"11", fill:"var(--chart-muted)" });
+      lbl.textContent = moneyCompact(val);
+      svg.appendChild(lbl);
+    }
+    // baseline
+    svg.appendChild(svgEl("line", { x1:padL, x2:W-padR, y1:padT+plotH, y2:padT+plotH, stroke:"var(--chart-baseline)", "stroke-width":"1" }));
+
+    // x labels (every other month if tight)
+    MONTHS.forEach(function(mo, i){
+      var showEvery = MONTHS.length > 8 ? 2 : 1;
+      if (i % showEvery !== 0 && i !== MONTHS.length-1) return;
+      var lbl = svgEl("text", { x:xFor(i), y:H-10, "text-anchor":"middle", "font-size":"11", fill:"var(--chart-muted)" });
+      lbl.textContent = mo.shortLabel;
+      svg.appendChild(lbl);
+    });
+
+    // series lines + markers
+    SERIES_DEFS.forEach(function(s){
+      var pts = values.map(function(v,i){ return [xFor(i), yFor(v[s.key])]; });
+      var d = pts.map(function(p,i){ return (i===0?"M":"L") + p[0].toFixed(1) + "," + p[1].toFixed(1); }).join(" ");
+      svg.appendChild(svgEl("path", { d:d, fill:"none", stroke:s.color, "stroke-width":"2", "stroke-linejoin":"round", "stroke-linecap":"round" }));
+      pts.forEach(function(p){
+        svg.appendChild(svgEl("circle", { cx:p[0], cy:p[1], r:"5.5", fill:s.color, stroke:"var(--chart-surface)", "stroke-width":"2" }));
+      });
+      // direct end-label on the last point (sparing labeling, per skill)
+      var last = pts[pts.length-1];
+      var endLbl = svgEl("text", { x:last[0]+8, y:last[1]+4, "font-size":"11", fill:"var(--chart-ink-secondary)", "font-weight":"600" });
+      endLbl.textContent = moneyCompact(values[values.length-1][s.key]);
+      if (last[0] < W - padR - 60){ svg.appendChild(endLbl); }
+    });
+
+    // crosshair (hidden until hover)
+    var crosshair = svgEl("line", { x1:padL, x2:padL, y1:padT, y2:padT+plotH, stroke:"var(--chart-muted)", "stroke-width":"1", "stroke-dasharray":"3,3", opacity:"0" });
+    svg.appendChild(crosshair);
+
+    // hit-area overlay (bigger than the marks, per interaction.md)
+    var hit = svgEl("rect", { x:padL, y:padT, width:plotW, height:plotH, fill:"transparent" });
+    svg.appendChild(hit);
+
+    wrapEl.appendChild(svg);
+
+    var tooltip = document.createElement("div");
+    tooltip.className = "chart-tooltip";
+    tooltip.style.display = "none";
+    wrapEl.style.position = "relative";
+    wrapEl.appendChild(tooltip);
+
+    function showTooltipAt(i, clientX, clientY){
+      var mo = MONTHS[i];
+      var v = values[i];
+      crosshair.setAttribute("x1", xFor(i)); crosshair.setAttribute("x2", xFor(i)); crosshair.setAttribute("opacity","1");
+      var rows = SERIES_DEFS.map(function(s){
+        return '<div class="tt-row"><span class="k" style="border-color:'+s.color+'"></span><span>'+s.label+'</span><span class="v">'+money(v[s.key])+'</span></div>';
+      }).join("");
+      tooltip.innerHTML = '<div class="tt-month"></div>' + rows;
+      tooltip.querySelector(".tt-month").textContent = mo.label;
+      var wrapRect = wrapEl.getBoundingClientRect();
+      var svgRect = svg.getBoundingClientRect();
+      var xRatio = xFor(i) / W;
+      var px = svgRect.left - wrapRect.left + xRatio * svgRect.width;
+      var py = svgRect.top - wrapRect.top + (yFor(Math.max(v.forecast,v.delivered,v.installed))/H) * svgRect.height;
+      tooltip.style.left = px + "px";
+      tooltip.style.top = Math.max(py, 10) + "px";
+      tooltip.style.display = "block";
+    }
+    function hideTooltip(){
+      tooltip.style.display = "none";
+      crosshair.setAttribute("opacity","0");
+    }
+    function nearestIndexFromClientX(clientX){
+      var svgRect = svg.getBoundingClientRect();
+      var relX = ((clientX - svgRect.left) / svgRect.width) * W;
+      var best = 0, bestDist = Infinity;
+      for (var i=0;i<MONTHS.length;i++){
+        var dist = Math.abs(xFor(i) - relX);
+        if (dist < bestDist){ bestDist = dist; best = i; }
+      }
+      return best;
+    }
+    hit.addEventListener("pointermove", function(ev){
+      var i = nearestIndexFromClientX(ev.clientX);
+      showTooltipAt(i, ev.clientX, ev.clientY);
+    });
+    hit.addEventListener("pointerleave", hideTooltip);
+    hit.addEventListener("pointerdown", function(ev){
+      var i = nearestIndexFromClientX(ev.clientX);
+      showTooltipAt(i, ev.clientX, ev.clientY);
+    });
+  }
+
+  /* ============================================================
+   * MONTH PICKER + TABLE + EXPORT
+   * ============================================================ */
+  function renderMonthPicker(container, selectedSet, onChange){
+    container.innerHTML = "";
+    var allChip = document.createElement("label");
+    allChip.className = "month-chip all";
+    var allCb = document.createElement("input");
+    allCb.type = "checkbox";
+    allCb.checked = MONTHS.every(function(mo){ return selectedSet.has(mo.key); });
+    allCb.addEventListener("change", function(){
+      MONTHS.forEach(function(mo){ if (allCb.checked) selectedSet.add(mo.key); else selectedSet.delete(mo.key); });
+      onChange();
+    });
+    allChip.appendChild(allCb);
+    allChip.appendChild(document.createTextNode("All months"));
+    container.appendChild(allChip);
+
+    MONTHS.forEach(function(mo){
+      var chip = document.createElement("label");
+      chip.className = "month-chip";
+      var cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = selectedSet.has(mo.key);
+      cb.addEventListener("change", function(){
+        if (cb.checked) selectedSet.add(mo.key); else selectedSet.delete(mo.key);
+        onChange();
+      });
+      chip.appendChild(cb);
+      chip.appendChild(document.createTextNode(mo.shortLabel));
+      container.appendChild(chip);
+    });
+  }
+
+  function renderMonthlyTable(tbody, buckets, selectedSet, onToggle){
+    tbody.innerHTML = "";
+    var totals = { forecast:0, delivered:0, installed:0 };
+    MONTHS.forEach(function(mo){
+      var v = buckets[mo.key];
+      totals.forecast += v.forecast; totals.delivered += v.delivered; totals.installed += v.installed;
+      var tr = document.createElement("tr");
+      var tdChk = document.createElement("td"); tdChk.className = "chk";
+      var cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = selectedSet.has(mo.key);
+      cb.addEventListener("change", function(){ if (cb.checked) selectedSet.add(mo.key); else selectedSet.delete(mo.key); onToggle(); });
+      tdChk.appendChild(cb); tr.appendChild(tdChk);
+      var tdMonth = document.createElement("td"); tdMonth.textContent = mo.label; tr.appendChild(tdMonth);
+      ["forecast","delivered","installed"].forEach(function(k){
+        var td = document.createElement("td"); td.className = "num"; td.textContent = money(v[k]); tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    var trTotal = document.createElement("tr");
+    trTotal.className = "total-row";
+    trTotal.innerHTML = "<td></td><td>Total</td><td class=\"num\">"+money(totals.forecast)+"</td><td class=\"num\">"+money(totals.delivered)+"</td><td class=\"num\">"+money(totals.installed)+"</td>";
+    tbody.appendChild(trTotal);
+  }
+
+  function exportWorkbook(filename, sheets){
+    var wb = XLSX.utils.book_new();
+    sheets.forEach(function(sheet){
+      var ws = XLSX.utils.aoa_to_sheet(sheet.rows);
+      XLSX.utils.book_append_sheet(wb, ws, sheet.name);
+    });
+    XLSX.writeFile(wb, filename);
+  }
+
+  /* ============================================================
+   * HOME SCREEN
+   * ============================================================ */
+  function renderHome(){
+    var list = document.getElementById("projectList");
+    list.innerHTML = "";
+    PROJECTS.forEach(function(p){
+      var agg = PROJECT_AGG[p.no];
+      var btn = document.createElement("button");
+      btn.className = "list-item";
+      btn.innerHTML =
+        '<div class="li-main">' +
+          '<span class="li-title">' + p.no + ' — ' + p.name + '</span>' +
+          '<span class="li-sub">Builder: ' + p.contractor + ' &nbsp;·&nbsp; PM: ' + p.projectManager + '</span>' +
+        '</div>' +
+        '<span class="li-value">' + money(agg.totals.contract) + '</span>' +
+        '<span class="chev">›</span>';
+      btn.addEventListener("click", function(){ openProject(p.no); });
+      list.appendChild(btn);
+    });
+  }
+
+  document.getElementById("openAllProjectsBtn").addEventListener("click", function(){ renderAll(); showScreen("all"); });
+
+  /* ============================================================
+   * ALL PROJECTS SCREEN
+   * ============================================================ */
+  var allSelectedMonths = new Set(MONTHS.map(function(m){ return m.key; }));
+
+  function renderAll(){
+    // stat row: company totals
+    var companyTotals = { contract:0, deliveredToDate:0, installedToDate:0 };
+    Object.keys(PROJECT_AGG).forEach(function(no){
+      var t = PROJECT_AGG[no].totals;
+      companyTotals.contract += t.contract;
+      companyTotals.deliveredToDate += t.deliveredToDate;
+      companyTotals.installedToDate += t.installedToDate;
+    });
+    var statRow = document.getElementById("allStatRow");
+    statRow.innerHTML =
+      tile("Total contract value (all projects)", money(companyTotals.contract), "forecast") +
+      tile("Delivered to date (75% earned)", money(companyTotals.deliveredToDate), "delivered") +
+      tile("Installed to date (100% earned)", money(companyTotals.installedToDate), "installed");
+
+    renderLegend(document.getElementById("allChartLegend"));
+    renderLineChart(document.getElementById("allChartWrap"), COMPANY_BUCKETS);
+
+    var tbody = document.querySelector("#allProjectsTable tbody");
+    tbody.innerHTML = "";
+    PROJECTS.forEach(function(p){
+      var agg = PROJECT_AGG[p.no];
+      var tr = document.createElement("tr");
+      tr.innerHTML =
+        "<td>" + p.no + "</td>" +
+        "<td>" + p.name + "</td>" +
+        "<td>" + p.contractor + "</td>" +
+        "<td>" + p.projectManager + "</td>" +
+        "<td class=\"num\">" + money(agg.totals.contract) + "</td>" +
+        "<td class=\"num\">" + money(agg.totals.deliveredToDate) + "</td>" +
+        "<td class=\"num\">" + money(agg.totals.installedToDate) + "</td>" +
+        "<td></td>";
+      var openTd = tr.lastElementChild;
+      var openBtn = document.createElement("button");
+      openBtn.className = "btn secondary sm";
+      openBtn.textContent = "Open";
+      openBtn.addEventListener("click", function(){ openProject(p.no); });
+      openTd.appendChild(openBtn);
+      tbody.appendChild(tr);
+    });
+    var totalRow = document.createElement("tr");
+    totalRow.className = "total-row";
+    totalRow.innerHTML = "<td></td><td>Total</td><td></td><td></td><td class=\"num\">"+money(companyTotals.contract)+"</td><td class=\"num\">"+money(companyTotals.deliveredToDate)+"</td><td class=\"num\">"+money(companyTotals.installedToDate)+"</td><td></td>";
+    tbody.appendChild(totalRow);
+
+    function refreshMonthlyBits(){
+      renderMonthPicker(document.getElementById("allMonthPicker"), allSelectedMonths, refreshMonthlyBits);
+      renderMonthlyTable(document.querySelector("#allMonthlyTable tbody"), COMPANY_BUCKETS, allSelectedMonths, refreshMonthlyBits);
+    }
+    refreshMonthlyBits();
+  }
+
+  function tile(label, value, cls){
+    return '<div class="stat-tile ' + cls + '"><div class="stat-label">' + label + '</div><div class="stat-value">' + value + '</div></div>';
+  }
+
+  document.getElementById("exportAllBtn").addEventListener("click", function(){
+    var months = MONTHS.filter(function(mo){ return allSelectedMonths.has(mo.key); });
+    if (!months.length){ alert("Tick at least one month to export."); return; }
+    var summaryRows = [["Month","Forecast","Delivered (75%)","Installed (100%)"]];
+    months.forEach(function(mo){
+      var v = COMPANY_BUCKETS[mo.key];
+      summaryRows.push([mo.label, v.forecast, v.delivered, v.installed]);
+    });
+    var sheets = [{ name:"All projects", rows: summaryRows }];
+    PROJECTS.forEach(function(p){
+      var agg = PROJECT_AGG[p.no];
+      var rows = [["Month","Forecast","Delivered (75%)","Installed (100%)"]];
+      months.forEach(function(mo){
+        var v = agg.buckets[mo.key];
+        rows.push([mo.label, v.forecast, v.delivered, v.installed]);
+      });
+      sheets.push({ name: p.no.slice(0,28), rows: rows });
+    });
+    exportWorkbook("UTZLINE-dollar-summary-all-projects.xlsx", sheets);
+  });
+
+  /* ============================================================
+   * PROJECT DETAIL SCREEN
+   * ============================================================ */
+  var projSelectedMonths = {}; // no -> Set
+
+  function openProject(no){
+    if (!projSelectedMonths[no]) projSelectedMonths[no] = new Set(MONTHS.map(function(m){ return m.key; }));
+    var p = PROJECTS.find(function(pp){ return pp.no === no; });
+    var agg = PROJECT_AGG[no];
+
+    document.getElementById("projTitle").textContent = p.no + " — " + p.name;
+    document.getElementById("projSub").textContent = "Builder: " + p.contractor + "  ·  Project manager: " + p.projectManager;
+
+    var statRow = document.getElementById("projStatRow");
+    statRow.innerHTML =
+      tile("Contract value", money(agg.totals.contract), "forecast") +
+      tile("Delivered to date (75% earned)", money(agg.totals.deliveredToDate), "delivered") +
+      tile("Installed to date (100% earned)", money(agg.totals.installedToDate), "installed");
+
+    renderLegend(document.getElementById("projChartLegend"));
+    renderLineChart(document.getElementById("projChartWrap"), agg.buckets);
+
+    function refreshMonthlyBits(){
+      renderMonthPicker(document.getElementById("projMonthPicker"), projSelectedMonths[no], refreshMonthlyBits);
+      renderMonthlyTable(document.querySelector("#projMonthlyTable tbody"), agg.buckets, projSelectedMonths[no], refreshMonthlyBits);
+    }
+    refreshMonthlyBits();
+
+    var itemsBody = document.querySelector("#projItemsTable tbody");
+    itemsBody.innerHTML = "";
+    p.items.slice().sort(function(a,b){ return a.requiredDeliveryDate < b.requiredDeliveryDate ? -1 : 1; }).forEach(function(item){
+      var tr = document.createElement("tr");
+      tr.innerHTML =
+        "<td>" + item.joineryId + "</td>" +
+        "<td>" + item.description + "</td>" +
+        "<td>" + item.requiredDeliveryDate + "</td>" +
+        "<td>" + STATUS_LABEL[item.status] + "</td>" +
+        "<td class=\"num\">" + money(item.dollarValue) + "</td>";
+      itemsBody.appendChild(tr);
+    });
+
+    document.getElementById("exportProjBtn").onclick = function(){
+      var months = MONTHS.filter(function(mo){ return projSelectedMonths[no].has(mo.key); });
+      if (!months.length){ alert("Tick at least one month to export."); return; }
+      var rows = [["Month","Forecast","Delivered (75%)","Installed (100%)"]];
+      months.forEach(function(mo){
+        var v = agg.buckets[mo.key];
+        rows.push([mo.label, v.forecast, v.delivered, v.installed]);
+      });
+      var itemRows = [["Joinery ID","Description","Required delivery","Status","Dollar value"]];
+      p.items.forEach(function(item){
+        itemRows.push([item.joineryId, item.description, item.requiredDeliveryDate, STATUS_LABEL[item.status], item.dollarValue]);
+      });
+      exportWorkbook("UTZLINE-dollar-summary-" + p.no + ".xlsx", [
+        { name:"Monthly breakdown", rows: rows },
+        { name:"Joinery items", rows: itemRows }
+      ]);
+    };
+
+    showScreen("project");
+  }
+
+  /* ============================================================
+   * INIT
+   * ============================================================ */
+  renderHome();
+
+  if ("serviceWorker" in navigator){
+    window.addEventListener("load", function(){
+      navigator.serviceWorker.register("./service-worker.js").catch(function(){});
+    });
+  }
+})();
+</script>
+</body>
+</html>
