@@ -42,14 +42,31 @@
 // vendored asset changes, so installed copies pick up the update instead
 // of serving stale files forever.
 //
+// v2 (2026-09-26, same day): real data + layout change. Andrew: "build
+// it, but i want to change the layout of that app. all projects still
+// needs to show monthly summaries of each project. month by month,
+// maybe a par graph or button graph" (bar graph). SAMPLE_PROJECTS is
+// gone -- this app now reads the real Projects-root folder directly
+// (File System Access API, "read" mode only), the same folder every
+// sibling app shares: project-meta.json, joinery-items.json, and the
+// shared joinery-status.json/joinery-schedule.json event pipeline
+// (folded, with a legacy flat-array fallback for a project that
+// predates the event-sourced format). STRICTLY READ-ONLY -- this app
+// never writes a byte back to the Projects root and never creates an
+// events folder as a migration side effect, unlike UTZLINE Projects' own
+// reader. The All Projects screen gained a new "Monthly summary by
+// project" section (one small-multiple bar chart per project, per the
+// dataviz skill's small-multiples pattern), and the chart form itself
+// changed everywhere from a multi-line chart to a grouped bar chart
+// (same validated categorical palette, now as fills). See index.html's
+// own top-of-file comment for the full write-up.
+//
 // Does NOT touch source.html, Site Measure, Viewer, Install ITP,
 // Manufacture ITP, Delivery ITP, Projects, Scheduler, Machine Schedule,
-// or Solid Surface Schedule in any way -- this app only ever reads
-// nothing from them yet (placeholder data), and will only ever be
-// READ-ONLY against the shared Projects-root folder once real-data
-// integration is built.
+// or Solid Surface Schedule in any way -- this app is READ-ONLY against
+// the shared Projects-root folder and writes to none of them.
 var ICON_VERSION = "v1";
-var CACHE_NAME = "utzline-dollar-summary-cache-v1";
+var CACHE_NAME = "utzline-dollar-summary-cache-v2";
 
 var PRECACHE_URLS = [
   "./",

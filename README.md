@@ -1,6 +1,14 @@
 # UTZLINE $ Summary — installable app
 
-**Current version: v1** (its own independent version line, separate from every other app in the family — bump this line, and add a dated entry below, every time a new build ships.)
+**Current version: v2** (its own independent version line, separate from every other app in the family — bump this line, and add a dated entry below, every time a new build ships.)
+
+**v2 (2026-09-26, same day) — real data + layout change:** Andrew, verbatim: *"build it, but i want to change the layout of that app. all projects still needs to show monthly summaries of each project. month by month, maybe a par graph or button graph"* (read as: a bar graph — "button" graph is dictation noise for "bar").
+
+- **Real data.** `SAMPLE_PROJECTS` is gone. This app now reads the real Projects-root folder directly via the File System Access API (own folder picker + IndexedDB persistence, `utzline-dollar-summary-db`, requesting **"read" mode only** — this app has no writable path at all): `project-meta.json`, `joinery-items.json`, and the shared `joinery-status.json`/`joinery-schedule.json` event pipeline (folded, same rank table as UTZLINE Projects' own reader, with a legacy flat-array fallback for a project that predates the event-sourced format). **Strictly read-only** — unlike UTZLINE Projects' own reader, this app never creates a "Joinery Status"/"Joinery Schedule" events folder as a migration side effect; if one isn't there yet, it just reads the legacy file directly and creates nothing. An item with no `requiredDeliveryDate` set counts toward that project's totals but not into any month bucket — surfaced via a small "$X not yet scheduled" note wherever it's non-zero, rather than silently dropped or mis-bucketed. A project that fails to read (mid-sync) is skipped with a banner naming how many, rather than blocking every other project.
+- **Layout — "Monthly summary by project."** The All Projects screen gained a new section: one small-multiple bar chart per project (the dataviz skill's own small-multiples pattern — "many series, same shape, compare across them"), so every project's own month-by-month Forecast/Delivered/Installed is visible on this one screen without drilling into each project individually. Additive — the company-wide combined chart and the per-project table are both kept.
+- **Chart form — bar, not line.** Every chart in the app (company-wide, per-project detail, and the new small multiples) is now a grouped bar chart — three bars per month (Forecast/Delivered/Installed) — instead of the v1 multi-line chart, per Andrew's own suggestion. Same validated categorical palette (now as fills rather than strokes — colour validation is about perception, not mark type, so the same hex triple passes for the same reason), same crosshair + shared per-month tooltip hover layer on full-size charts, same legend (now filled swatches). Small multiples are static previews (no hover) — "Open" jumps to that project's own full interactive chart.
+- **Refresh.** A "↻ Refresh" button in the header re-reads the Projects folder and re-renders whichever screen is currently showing, so the app stays current without navigating back to Home.
+- Verified with a targeted functional check against a realistically-shaped mock Projects root (one project in the current event-sourced format, one in the legacy flat-array format, an item with no status event at all, an item with no schedule at all): both projects' totals/monthly buckets computed correctly, the legacy project's fallback path worked with zero folders created, and the real-data read confirmed byte-for-byte to never modify either project's own files.
 
 **v1 (2026-09-26):** First release. Andrew, verbatim: *"lets build a $ summary app, this can show month by month dollar values per project, forecasts and delivered / installed. with an export to excel button for selected months. this can project 12 months ahead of todays date."*
 
@@ -13,29 +21,27 @@ Followed by four clarifying answers (all captured before building) plus two mid-
 - *(mid-turn)* "it will also show total dollar values for all projects per month" — a company-wide monthly total row/series on the All Projects screen.
 - *(mid-turn)* "it will also have sexy looking charts" — see **Chart** below.
 
-### What's in this build
+### What's in this build (current, v2)
 
-- **Home screen** — every sample project (Job #, name, Builder, Project Manager, total contract value) plus an "All projects" entry point.
-- **All projects screen** — company-wide stat tiles (total contract value / delivered to date / installed to date), a company-wide monthly line chart, a per-project table (contract value, delivered-to-date, installed-to-date, an "Open" button into that project's drill-down), and a 12-month company-wide monthly breakdown table with a month-tickbox picker and an "Export selected months to Excel" button.
-- **Project detail screen** — the same stat tiles, chart, monthly breakdown table and month-tickbox export, scoped to one project, plus a read-only list of that project's joinery items (ID, description, required delivery, status, dollar value) so every number on the page is traceable back to real line items.
-- **12-month window** — always computed from `new Date()` at the moment the app opens (current month + the next 11), never hardcoded to today's actual date, so the app stays correct as time passes.
-- **Export to Excel** — SheetJS (`xlsx.full.min.js` v0.18.5, Apache-2.0), vendored locally at `vendor/xlsx.full.min.js` (same vendor-everything-locally convention as every other library used across this family), entirely client-side. The All Projects export produces one "All projects" summary sheet plus one sheet per project; the per-project export produces a monthly-breakdown sheet plus a joinery-items sheet. Only the ticked months are included.
-- **Chart** — built per the `dataviz` skill's own procedure before writing any chart code: form picked first (multi-line, for "trend over time" + "tell 3 distinct series apart"), then color assigned in the skill's fixed categorical slot order (slot 1 blue = Forecast, slot 2 orange = Delivered, slot 3 aqua = Installed — the reference palette's own "first three slots validate all-pairs in both modes" safe zone), then validated: `node scripts/validate_palette.js "#3987e5,#d95926,#199e70" --mode dark --surface "#1a1a19"` → **ALL CHECKS PASS** (worst adjacent CVD ΔE 9.4, worst normal-vision ΔE 26.5, all ≥3:1 contrast against this app's own dark chart surface). Hand-rolled inline SVG (no charting library, matching this family's offline-PWA convention) with 2px lines and round joins, ≥8px surface-ringed markers, hairline recessive gridlines, sparing direct end-labels, a legend with line-key swatches (never boxes, per the skill's mark spec), and a crosshair + one-shared-tooltip hover layer (values bold and leading, series name secondary).
+- **Folder picker + reconnect** — its own "Choose your Projects folder" / "Reconnect" screens, own IndexedDB (`utzline-dollar-summary-db`), same remember-the-handle pattern as every sibling app, **"read" mode only**.
+- **Home screen** — every real project found in the folder (Job #, name, Builder, Project Manager, total contract value) plus an "All projects" entry point and a "↻ Refresh" button in the header.
+- **All projects screen** — company-wide stat tiles, a company-wide monthly **bar chart**, a new **"Monthly summary by project"** section (one small-multiple bar chart per project), a per-project table (contract value, delivered-to-date, installed-to-date, an "Open" button), and a 12-month company-wide monthly breakdown table with a month-tickbox picker and an "Export selected months to Excel" button.
+- **Project detail screen** — the same stat tiles, bar chart, monthly breakdown table and month-tickbox export, scoped to one project, plus a read-only list of that project's joinery items (ID, description, required delivery, status, dollar value) and an "unscheduled value" note when applicable.
+- **12-month window** — always computed from `new Date()` at the moment the app opens, never hardcoded.
+- **Export to Excel** — SheetJS (`xlsx.full.min.js` v0.18.5, Apache-2.0), vendored locally, entirely client-side, unchanged since v1.
+- **Chart** — built per the `dataviz` skill's own procedure: grouped bar chart (full-size + small multiples), categorical color in the skill's fixed slot order, validated with `node scripts/validate_palette.js "#3987e5,#d95926,#199e70" --mode dark --surface "#1a1a19"` → **ALL CHECKS PASS**. Hand-rolled inline SVG, rounded bar ends, hairline recessive gridlines, a legend with filled swatches, a crosshair + one-shared-tooltip hover layer on full-size charts.
 
-### Known, disclosed limitation — placeholder data
+### Real-data reader — how it reads your Projects folder
 
-**`SAMPLE_PROJECTS` in `index.html` is entirely deterministic sample data, not read from any real Projects-root folder.** It exists purely so this app has something real-shaped to display and export while `dollarValue` doesn't exist yet anywhere in UTZLINE Projects. The data model it's built against mirrors real, already-existing fields exactly, so a later real-data reader is a drop-in replacement, not a rewrite:
+This app is **strictly read-only** against the shared Projects-root folder — it never writes a byte back, and unlike UTZLINE Projects' own reader, it never creates a "Joinery Status"/"Joinery Schedule" events folder as a migration side effect. Per project folder, it reads:
 
 ```
-project = { no, name, contractor (="Builder" in the UI), projectManager, items: [ item, ... ] }
-item    = { joineryId, description, dollarValue (number),
-            status ("created"|"measured"|"in_manufacture"|"machined"|
-                    "manufactured"|"delivered"|"installed"),
-            requiredDeliveryDate ("YYYY-MM-DD") }
+<Project>/project-meta.json                                    -- {no, name, contractor, projectManager}
+<Project>/joinery-items.json                                    -- [{joineryId, description, level, room, dollarValue, ...}]
+<Project>/Project Saves/Joinery Status/<key>/*.json              -- event-sourced status (folded; legacy joinery-status.json fallback)
+<Project>/Project Saves/Joinery Schedule/<key>/*.json             -- event-sourced schedule (folded; legacy joinery-schedule.json fallback)
 ```
 
-`{no, name, contractor, projectManager}` is exactly `project-meta.json`'s shape (UTZLINE Projects' own `readProjectMeta`/`writeProjectMeta`); `joineryId`/`description` come straight off `joinery-items.json`; `status` uses the exact same shared `joinery-status.json` pipeline strings every sibling app already uses; `requiredDeliveryDate` is exactly `joinery-schedule.json`'s own field. **Only `dollarValue` has no real source yet** — it's the one field this whole app is waiting on (`NEXT_RUN_NOTES.md` item 14, still queued/unbuilt as of this release). Once it lands, replacing `buildSampleProjects()` with a real Projects-root folder reader (File System Access API, same pattern every sibling app already uses) that produces this exact shape is the entire integration — nothing else in this file needs to change.
+An item with no schedule entry has no `requiredDeliveryDate` — it counts toward that project's totals but is left out of every month bucket, surfaced via a small "$X not yet scheduled" note wherever non-zero. A project that fails to read (mid-sync) is skipped, with a banner naming how many; the rest still render. A folder that looks like a single Level's or Project's own folder (not the Projects root itself) is rejected with guidance, same as UTZLINE Projects' own picker.
 
-Everything else about this build is real, working logic against that data model: the earned-value math, the 12-month window, the chart, the tables, and the Excel export all operate on whatever `PROJECTS` array they're given.
-
-Does not touch `source.html`, Site Measure, Viewer, Install ITP, Manufacture ITP, Delivery ITP, UTZLINE Projects, Scheduler, Machine Schedule, or Solid Surface Schedule in any way.
+Does not touch `source.html`, Site Measure, Viewer, Install ITP, Manufacture ITP, Delivery ITP, UTZLINE Projects, Scheduler, Machine Schedule, or Solid Surface Schedule in any way — read-only against their shared data, never written to.

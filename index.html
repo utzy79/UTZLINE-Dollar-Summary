@@ -8,99 +8,137 @@
     export to excel button for selected months. this can project 12
     months ahead of todays date."
 
-  Followed by (all captured via AskUserQuestion before building):
-    - Build now with PLACEHOLDER/sample data, rather than waiting for the
-      real `dollarValue` field to land on joinery items in UTZLINE
-      Projects (see NEXT_RUN_NOTES.md item 14, still queued/unbuilt).
-    - "delivered" brings an item's dollar value to 75%, "installed" brings
-      it to 100% -- progress-claims-style earned value.
-    - New standalone PWA (matches how Scheduler/Machine Schedule/Solid
-      Surface Schedule were each stood up), not a screen inside Projects.
-    - Both a single-project drill-down AND an "all projects" combined
-      view, each project listed with its own dollar value, Project
-      Manager and Builder.
-    - Mid-turn additions: "it will also show total dollar values for all
-      projects per month" (a company-wide monthly total) and "it will
-      also have sexy looking charts" (the dataviz-skill-driven chart
-      below).
+  v1 (same day) shipped against placeholder/sample data -- see this file's
+  own git history / the project doc `dollar-summary-app-v1.md` for that
+  round's full writeup (both a single-project drill-down AND an "all
+  projects" combined view, delivered/installed earned-value lenses,
+  export to Excel, a hand-rolled inline-SVG chart built per the dataviz
+  skill).
 
   ****************************************************************
-  * THIS IS A FIRST PASS BUILT AGAINST PLACEHOLDER DATA.          *
-  * SAMPLE_PROJECTS below (deterministically generated, not read  *
-  * from any real Projects-root folder) stands in for real data   *
-  * until UTZLINE Projects gets a real `dollarValue` field on      *
-  * joinery items (NEXT_RUN_NOTES.md item 14). Swapping in real    *
-  * data later means writing a Projects-root reader that produces  *
-  * the exact same shape this file already consumes -- see the     *
-  * "DATA MODEL" section below for exactly what that shape is.     *
+  * v2 (2026-09-26, same day) -- REAL DATA + LAYOUT CHANGE.        *
+  * Andrew: "build it, but i want to change the layout of that     *
+  * app. all projects still needs to show monthly summaries of     *
+  * each project. month by month, maybe a par graph or button      *
+  * graph." (read as: a bar graph -- "button" graph is dictation    *
+  * noise for "bar".)                                               *
   ****************************************************************
 
-  DATA MODEL this app is built against (so a later real-data reader has an
-  exact target to hit):
-    project = { no, name, contractor (="Builder" in the UI), projectManager,
+  WHAT CHANGED, PART 1 -- real data. Projects v25 (this same day) shipped
+  a real `dollarValue` field on joinery items in UTZLINE Projects
+  (`redline-utzline-projects-pwa`), so the placeholder SAMPLE_PROJECTS
+  generator is gone. This app now reads the real Projects-root folder
+  directly, via the File System Access API -- the same folder Site
+  Measure/Viewer/Projects/every ITP app already reads and writes:
+
+    <ProjectsRoot>/<Project>/project-meta.json        -- {no, name, contractor, projectManager}
+    <ProjectsRoot>/<Project>/joinery-items.json        -- [{joineryId, description, level, room, dollarValue, ...}]
+    <ProjectsRoot>/<Project>/Project Saves/Joinery Status/<key>/*.json     -- event-sourced status (folded; legacy flat-array fallback)
+    <ProjectsRoot>/<Project>/Project Saves/Joinery Schedule/<key>/*.json   -- event-sourced schedule (folded; legacy flat-array fallback)
+
+  This app is STRICTLY READ-ONLY against every one of those -- it never
+  writes a byte back to the Projects root, never creates a "Joinery
+  Status"/"Joinery Schedule" events folder (no migration side-effect
+  either, unlike UTZLINE Projects' own reader: if the event-sourced
+  folder isn't there yet, this app just falls back to reading the legacy
+  flat-array file directly, and creates nothing). Consistent with
+  Andrew's own precedent for every app in this family ("Do not change
+  any other apps... just build the standalone [app]") -- this build
+  takes that a step further: not just "doesn't touch other apps' code",
+  but "cannot write to their data even by accident."
+
+  A project folder with no `dollarValue` on some/all of its items simply
+  shows $0 for those (same "unset reads as the muted default" convention
+  every sibling app uses); an item with no Joinery Schedule entry has no
+  `requiredDeliveryDate` and is counted in that project's contract/
+  delivered/installed TOTALS but left out of every month bucket (there's
+  no month to put it in) -- flagged to the person viewing via a small
+  "$X not yet scheduled" note wherever it's non-zero, rather than being
+  silently dropped or silently mis-bucketed into "this month".
+
+  Folder picker: own IndexedDB ("utzline-dollar-summary-db"), same
+  remember-the-handle-and-reconnect pattern as every sibling app,
+  requesting "read" mode only (never "readwrite" -- this app has no
+  writable path at all). A folder that looks like a single Level's or
+  a single Project's own folder (not the Projects root itself) is
+  rejected with the same guidance Projects' own picker gives.
+
+  WHAT CHANGED, PART 2 -- layout. Andrew's own words: "all projects still
+  needs to show monthly summaries of each project. month by month...
+  bar graph." The All Projects screen gained a new "Monthly summary by
+  project" section: one small-multiple bar chart per project (per the
+  dataviz skill's own small-multiples pattern for "many series, same
+  shape, compare across them"), so every project's own month-by-month
+  Forecast/Delivered/Installed is visible on this ONE screen without
+  drilling into each project individually -- the company-wide combined
+  view and the per-project table are both kept exactly as before,
+  this is additive. The chart form itself also changed on every screen
+  (company-wide, per-project detail, and the new small multiples): the
+  original multi-line chart is now a grouped bar chart -- three bars per
+  month (Forecast/Delivered/Installed), same categorical palette/colours
+  as before (a bar chart's own mark spec is fills, not strokes, but the
+  same validated hex triple works for either), same crosshair + shared
+  per-month tooltip hover layer, same legend (now filled swatches rather
+  than line-key swatches, matching the fill-not-stroke mark).
+
+  DATA MODEL this app is built against (drives both the reader above and
+  every screen below):
+    project = { folderName (the real Projects-root subfolder name -- the
+                stable identity used everywhere in this file instead of
+                `no`, which real project-meta.json data can leave blank
+                or, in principle, duplicate across projects), no, name,
+                contractor (="Builder" in the UI), projectManager,
                 items: [ item, ... ] }
     item    = { joineryId, description, dollarValue (number),
                 status ("created"|"measured"|"in_manufacture"|"machined"|
                         "manufactured"|"delivered"|"installed"),
-                requiredDeliveryDate ("YYYY-MM-DD") }
-  This mirrors real, already-existing fields: project-meta.json's
-  {no, name, contractor, projectManager} (UTZLINE Projects,
-  readProjectMeta/writeProjectMeta), joinery-items.json's per-item
-  {joineryId, description}, the shared joinery-status.json pipeline's
-  status strings, and joinery-schedule.json's requiredDeliveryDate. Only
-  `dollarValue` has no real source yet.
+                requiredDeliveryDate ("YYYY-MM-DD" or "" if unscheduled) }
 
-  EARNED-VALUE LOGIC (per Andrew's answer above): every item's dollarValue
-  is counted in exactly one of three lenses for whichever month its
-  requiredDeliveryDate falls in --
+  EARNED-VALUE LOGIC (unchanged from v1, per Andrew's original answer):
+  every item's dollarValue is counted in exactly one of three lenses for
+  whichever month its requiredDeliveryDate falls in --
     Forecast   = full dollarValue, regardless of status (the planned/
-                 contracted value for that month -- this is what every
-                 item scheduled for a month is "worth" once it ships)
+                 contracted value for that month)
     Delivered  = dollarValue * 0.75, only for items whose status is
                  exactly "delivered" (not yet installed)
     Installed  = dollarValue * 1.00, only for items whose status is
                  "installed"
-  These are three distinct lenses on the SAME underlying scheduled value,
-  never summed together (summing would double-count -- see the chart and
-  table below, which always render them as separate series/columns, never
-  a combined total column).
+  Never summed together (summing would double-count) -- always rendered
+  as separate series/columns.
 
   Accent color: gold/money (#caa025) -- distinct from every sibling app's
-  own accent (Site Measure/Viewer orange-red, Install ITP green,
-  Manufacture ITP purple, Delivery ITP amber #b8791a, Projects crimson,
-  Scheduler blue/teal, Machine Schedule teal, Solid Surface Schedule
-  indigo).
+  own accent.
 
-  CHART: built per the dataviz skill's procedure (form before color,
-  color validated with scripts/validate_palette.js before use, mark specs,
-  hover layer, accessibility pass). Job = "trend over time" + "tell 3
-  distinct series apart" -> a multi-line chart, categorical color, in the
-  skill's own fixed slot order (slot1 blue/Forecast, slot2 orange/
-  Delivered, slot3 aqua/Installed -- the reference palette's own 3-series
-  "first three slots validate all-pairs in both modes" safe zone). Palette
-  validated against this app's own dark chart surface (#1a1a19, the
-  skill's own reference dark surface) with
-  `node scripts/validate_palette.js "#3987e5,#d95926,#199e70" --mode dark
-  --surface "#1a1a19"` -- ALL CHECKS PASS (worst adjacent CVD Delta E 9.4,
-  worst normal-vision Delta E 26.5, all >=3:1 contrast). Hand-rolled inline
-  SVG (no charting library) to match this family's offline-PWA,
-  vendor-everything-locally convention -- 2px lines, round joins, >=8px
-  ringed markers, hairline recessive gridlines, a legend (always present
-  for 3 series) with line-key swatches (never boxes, per marks-and-anatomy
-  .md), and a crosshair + one-tooltip-for-all-series hover layer (values
-  bold and leading, series name secondary, per interaction.md).
+  CHART: built per the dataviz skill's own procedure. Job = "compare
+  magnitude across discrete categories (months), 3 series, plus compare
+  across many projects" -> grouped bar chart (full-size) + small
+  multiples (compact, one per project), categorical color in the skill's
+  own fixed slot order (slot1 blue/Forecast, slot2 orange/Delivered,
+  slot3 aqua/Installed). Palette validated against this app's own dark
+  chart surface (#1a1a19) with `node scripts/validate_palette.js
+  "#3987e5,#d95926,#199e70" --mode dark --surface "#1a1a19"` -- ALL
+  CHECKS PASS (worst adjacent CVD Delta E 9.4, worst normal-vision Delta
+  E 26.5, all >=3:1 contrast) -- this is the same hex triple validated
+  for the v1 line chart; validation is about colour perception, not mark
+  type, so a filled bar in the same colour passes for the same reason.
+  Hand-rolled inline SVG (no charting library), rounded bar corners,
+  hairline recessive gridlines, a legend (filled swatches, matching the
+  fill mark), and a crosshair + one-tooltip-for-the-whole-month-group
+  hover layer on every full-size chart (small multiples are static --
+  hovering 20 tiny inline charts at once isn't a real interaction people
+  need; "Open" on any card jumps to that project's own full, interactive
+  chart).
 
-  EXPORT TO EXCEL: SheetJS (xlsx.full.min.js v0.18.5, Apache-2.0),
-  vendored locally at vendor/xlsx.full.min.js -- same pattern this family
-  already uses for every other vendored library (pdf.js, etc). "Export
-  selected months" builds a workbook from exactly the ticked month
-  columns, one sheet per project plus an "All projects" summary sheet,
+  EXPORT TO EXCEL: unchanged from v1 -- SheetJS (xlsx.full.min.js
+  v0.18.5, Apache-2.0), vendored locally at vendor/xlsx.full.min.js,
   entirely client-side, no network call.
 
   Andrew's own precedent for why this is a brand-new, separate app
   (Scheduler's own top-of-file comment, 2026-09-23): "Do not change any
-  other apps. they are all working, just build the standalone [app]." Does
-  NOT touch source.html, Projects, or any ITP/Scheduler app in any way.
+  other apps. they are all working, just build the standalone [app]."
+  Does NOT write to source.html, Projects, or any ITP/Scheduler app's own
+  data in any way -- read-only against the shared Projects-root folder,
+  as described above.
 -->
 <html lang="en">
 <head>
@@ -159,7 +197,7 @@
     flex: 0 0 auto;
   }
   header img{ width: 32px; height: 32px; border-radius: 8px; }
-  header .brand{ font-weight: 700; font-size: 17px; letter-spacing: 0.2px; }
+  header .brand{ font-weight: 700; font-size: 17px; letter-spacing: 0.2px; flex: 1 1 auto; }
   header .brand small{ display:block; font-weight: 500; font-size: 11px; color: var(--muted); letter-spacing: 0.5px; }
   main{
     flex: 1 1 auto;
@@ -171,6 +209,7 @@
   .screen{ width: 100%; max-width: 980px; }
   .screen[hidden]{ display: none; }
   .screen.wide{ max-width: 1180px; }
+  .screen.narrow{ max-width: 480px; margin: 0 auto; }
   h1{ font-size: 20px; margin: 0 0 6px; }
   h2{ font-size: 16px; margin: 0 0 4px; }
   p.sub{ color: var(--muted); margin: 0 0 20px; font-size: 14px; line-height: 1.5; }
@@ -241,6 +280,16 @@
   .li-value{ font-weight:700; font-variant-numeric: tabular-nums; color: var(--accent); font-size:16px; white-space:nowrap; }
   .empty-note{ color: var(--muted); font-size: 14px; padding: 18px 4px; text-align: center; }
   .section-title{ font-size: 15px; margin: 0 0 8px; }
+  .error-note{
+    background: rgba(255,93,93,0.1);
+    border: 1px solid var(--danger);
+    color: #ffb3b3;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 13px;
+    margin-top: 10px;
+  }
+  .refresh-note{ color: var(--muted); font-size: 12px; margin: 0 0 10px; }
 
   /* stat tiles */
   .stat-row{ display:flex; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
@@ -293,6 +342,7 @@
   .chart-legend{ display:flex; gap:16px; flex-wrap:wrap; }
   .legend-item{ display:flex; align-items:center; gap:6px; font-size:13px; color: var(--chart-ink-secondary); }
   .legend-key{ width:18px; height:0; border-top: 2px solid; display:inline-block; }
+  .legend-key.fill{ width:12px; height:12px; border-top:none; border-radius:3px; }
   .chart-wrap{ position:relative; }
   .chart-tooltip{
     position:absolute;
@@ -312,7 +362,16 @@
   .chart-tooltip .tt-month{ color: var(--chart-ink); font-weight:700; margin-bottom:4px; }
   .chart-tooltip .tt-row{ display:flex; align-items:center; gap:6px; margin-top:2px; }
   .chart-tooltip .tt-row .k{ width:12px; height:0; border-top:2px solid; display:inline-block; }
+  .chart-tooltip .tt-row .k.fillkey{ width:10px; height:10px; border-top:none; border-radius:2px; }
   .chart-tooltip .tt-row .v{ font-weight:700; color: var(--chart-ink); margin-left:auto; padding-left:10px; }
+
+  /* small multiples -- "monthly summary by project" */
+  .mini-chart-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(340px,1fr)); gap:14px; }
+  .mini-chart-card{ background: var(--chart-surface); border:1px solid var(--border); border-radius:10px; padding:12px; }
+  .mini-chart-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:6px; }
+  .mini-chart-head .name{ font-weight:600; font-size:13px; line-height:1.3; }
+  .mini-chart-head .value{ font-size:12px; color:var(--chart-muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .mini-unscheduled-note{ font-size:11px; color:var(--warn); margin-top:6px; }
 
   /* month picker */
   .month-picker{ display:flex; flex-wrap:wrap; gap:8px; margin: 10px 0 4px; }
@@ -324,6 +383,9 @@
   .month-chip input{ accent-color: var(--accent); cursor:pointer; }
   .month-chip.all{ font-weight:600; }
 
+  .field{ margin-bottom: 12px; }
+  .field label{ display:block; font-size:12px; color:var(--muted); margin-bottom:5px; }
+
   footer.app-foot{ text-align:center; color: var(--muted2); font-size:11px; padding: 10px 0 4px; }
 </style>
 </head>
@@ -332,20 +394,43 @@
 <header>
   <img src="./icons/icon-192.png" alt="">
   <div class="brand">UTZLINE $ Summary<small>Month-by-month dollar values, forecasts, delivered &amp; installed</small></div>
+  <button class="btn secondary sm" id="refreshBtn" title="Re-read the Projects folder">&#8635; Refresh</button>
 </header>
 
 <main>
 
+  <!-- ---- Setup: no Projects root chosen yet ---- -->
+  <section class="screen narrow" id="screenSetup">
+    <h1>Choose your Projects folder</h1>
+    <p class="sub">Pick the same top-level Projects folder used by UTZLINE Site Measure, Projects, Viewer and every ITP app. This app only ever reads from it -- it never writes anything back.</p>
+    <div class="card">
+      <button class="btn" id="chooseRootBtn">Choose Projects folder</button>
+      <div class="error-note" id="setupError" hidden></div>
+    </div>
+  </section>
+
+  <!-- ---- Reconnect: a folder was chosen before but permission lapsed ---- -->
+  <section class="screen narrow" id="screenReconnect" hidden>
+    <h1>Reconnect to your Projects folder</h1>
+    <p class="sub">Permission for "<span id="reconnectName"></span>" isn't active right now (this can happen after a browser restart). Reconnect to continue, or choose a different folder.</p>
+    <div class="card row">
+      <button class="btn" id="reconnectBtn">Reconnect</button>
+      <button class="btn secondary" id="reconnectChooseDifferentBtn">Choose a different folder</button>
+    </div>
+  </section>
+
   <!-- HOME -->
-  <section class="screen" id="screenHome">
+  <section class="screen" id="screenHome" hidden>
     <h1>$ Summary</h1>
-    <p class="sub">Month-by-month dollar values per project — forecast, delivered (75%) and installed (100%) — projecting 12 months ahead of today. Built against <strong>placeholder sample data</strong>; see the note on the All Projects screen for what changes once real dollar values land in UTZLINE Projects.</p>
+    <p class="sub">Month-by-month dollar values per project — forecast, delivered (75%) and installed (100%) — projecting 12 months ahead of today, read live from your Projects folder.</p>
+    <p class="refresh-note" id="homeRefreshNote" hidden>Reading your Projects folder…</p>
+    <div class="error-note" id="homeLoadError" hidden></div>
 
     <div class="card">
       <button class="list-item" id="openAllProjectsBtn" style="margin-bottom:0;">
         <div class="li-main">
           <span class="li-title">All projects</span>
-          <span class="li-sub">Combined view — every project, company-wide monthly totals, export</span>
+          <span class="li-sub">Combined view — every project, company-wide monthly totals, monthly summary by project, export</span>
         </div>
         <span class="chev">›</span>
       </button>
@@ -353,6 +438,8 @@
 
     <h2 class="section-title">Projects</h2>
     <div class="list" id="projectList"></div>
+    <div class="empty-note" id="projectListEmpty" hidden>No projects found in this folder yet.</div>
+    <button class="btn link" id="chooseDifferentRootBtn">Choose a different Projects folder</button>
   </section>
 
   <!-- ALL PROJECTS -->
@@ -361,7 +448,7 @@
       <button class="btn secondary sm" data-nav="home">‹ Home</button>
     </div>
     <h1>All projects</h1>
-    <p class="sub">Every project's total contract value, plus a company-wide month-by-month breakdown. Forecast, Delivered and Installed are separate lenses on the same scheduled value and are never summed into one total.</p>
+    <p class="sub">Every project's total contract value, a company-wide month-by-month breakdown, and each project's own monthly summary. Forecast, Delivered and Installed are separate lenses on the same scheduled value and are never summed into one total.</p>
 
     <div class="stat-row" id="allStatRow"></div>
 
@@ -371,6 +458,12 @@
         <div class="chart-legend" id="allChartLegend"></div>
       </div>
       <div class="chart-wrap" id="allChartWrap"></div>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">Monthly summary by project</h2>
+      <p class="sub" style="margin:0 0 10px;font-size:12px;">Each project's own Forecast / Delivered / Installed value, month by month. Open a project for the full interactive chart, table and export.</p>
+      <div class="mini-chart-grid" id="allProjectMiniGrid"></div>
     </div>
 
     <div class="card">
@@ -418,6 +511,7 @@
     <p class="sub" id="projSub"></p>
 
     <div class="stat-row" id="projStatRow"></div>
+    <p class="mini-unscheduled-note" id="projUnscheduledNote" hidden></p>
 
     <div class="chart-card">
       <div class="chart-head">
@@ -457,7 +551,7 @@
   </section>
 
 </main>
-<footer class="app-foot">UTZLINE $ Summary — placeholder sample data, v1</footer>
+<footer class="app-foot">UTZLINE $ Summary — v2, read live from your Projects folder</footer>
 
 <script src="./vendor/xlsx.full.min.js"></script>
 <script>
@@ -465,111 +559,407 @@
   "use strict";
 
   /* ============================================================
-   * PLACEHOLDER SAMPLE DATA
-   * Deterministic (seeded) so it looks the same every time the app
-   * opens, rather than reshuffling on every reload. Replace this
-   * whole block with a real Projects-root reader once dollarValue
-   * is a real field (NEXT_RUN_NOTES.md item 14) -- everything below
-   * this block consumes only the DATA MODEL documented at the top
-   * of the file, and does not care where it came from.
+   * SMALL HELPERS
    * ============================================================ */
+  function escapeHtml(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function pause(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+  var toastEl = null;
+  function ensureToastEl(){
+    if (toastEl) return toastEl;
+    toastEl = document.createElement("div");
+    toastEl.style.cssText = "position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:#0d0d0c;color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px 16px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s, transform .2s;z-index:50;max-width:90vw;text-align:center;";
+    document.body.appendChild(toastEl);
+    return toastEl;
+  }
+  function showToast(msg, durationMs){
+    var el = ensureToastEl();
+    el.textContent = msg;
+    el.style.opacity = "1";
+    el.style.transform = "translateX(-50%) translateY(0)";
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(function(){
+      el.style.opacity = "0";
+      el.style.transform = "translateX(-50%) translateY(20px)";
+    }, durationMs || 3200);
+  }
 
-  function mulberry32(seed){
-    return function(){
-      seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
-      var t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  /* ============================================================
+   * READ-ONLY FILE SYSTEM ACCESS LAYER
+   * This app never writes to the Projects root -- every function below
+   * either reads a file/listing or is a pure fold over data already
+   * read. No `create: true` appears anywhere in this section.
+   * ============================================================ */
+  var READ_RETRY_MS = 250;
+  function isNotFoundErr(err){ return !!(err && (err.name === "NotFoundError" || err.name === "TypeMismatchError")); }
+  function readFailedErr(what, err){ var e = new Error("Couldn't read " + what + (err && err.message ? " (" + err.message + ")" : "")); e.code = "read_failed"; e.cause = err; return e; }
+  function isReadFailed(err){ return !!(err && err.code === "read_failed"); }
+
+  function readTextFileStrict(dirHandle, fileName, what, parse){
+    function attempt(){
+      return dirHandle.getFileHandle(fileName, { create: false }).then(function(fh){
+        return fh.getFile().then(function(file){ return file.text(); }).then(function(text){
+          var value;
+          try{ value = parse ? parse(text) : text; }catch(e){ return Promise.reject(readFailedErr(what, e)); }
+          return { found: true, value: value };
+        }, function(err){ return Promise.reject(isReadFailed(err) ? err : readFailedErr(what, err)); });
+      }, function(err){
+        if (isNotFoundErr(err)) return { found: false, value: null };
+        return Promise.reject(readFailedErr(what, err));
+      });
+    }
+    return attempt().catch(function(){ return pause(READ_RETRY_MS).then(attempt); });
+  }
+  function readJsonArrayFileStrict(dirHandle, fileName, what){
+    return readTextFileStrict(dirHandle, fileName, what, function(text){
+      var parsed = JSON.parse(text);
+      if (!Array.isArray(parsed)) throw new Error("not a JSON array");
+      return parsed;
+    }).then(function(res){ return res.found ? res.value : []; });
+  }
+  function listSubdirNames(dirHandle){
+    if (!dirHandle || typeof dirHandle.values !== "function") return Promise.resolve([]);
+    var names = [];
+    var iter = dirHandle.values();
+    function step(){
+      return iter.next().then(function(res){
+        if (res.done) return names;
+        if (res.value && res.value.kind === "directory") names.push(res.value.name);
+        return step();
+      });
+    }
+    return step().then(function(list){
+      list.sort(function(a, b){ return a.localeCompare(b, undefined, { sensitivity: "base" }); });
+      return list;
+    });
+  }
+  function anySubfolderMatches(dirHandle, names, predicate, i){
+    i = i || 0;
+    if (i >= names.length) return Promise.resolve(false);
+    return dirHandle.getDirectoryHandle(names[i]).then(function(childHandle){
+      return predicate(childHandle);
+    }).catch(function(){ return false; }).then(function(matched){
+      if (matched) return true;
+      return anySubfolderMatches(dirHandle, names, predicate, i + 1);
+    });
+  }
+  // Same "is this a project folder" test as UTZLINE Projects' own picker --
+  // recognised by ANY ONE of project-meta.json, joinery-items.json, or a
+  // "Project Saves" folder. Purely a read-only sniff (create:false
+  // throughout), so this is safe to reuse verbatim.
+  function isProjectShaped(dirHandle){
+    return dirHandle.getFileHandle("project-meta.json").then(function(){ return true; }, function(){
+      return dirHandle.getFileHandle("joinery-items.json").then(function(){ return true; }, function(){
+        return dirHandle.getDirectoryHandle("Project Saves").then(function(){ return true; }, function(){ return false; });
+      });
+    });
+  }
+  function detectFolderShape(dirHandle){
+    return isProjectShaped(dirHandle).then(function(isProject){
+      if (isProject) return "project";
+      return listSubdirNames(dirHandle).then(function(names){
+        if (!names.length) return "empty";
+        return anySubfolderMatches(dirHandle, names, isProjectShaped).then(function(hasProjectChild){
+          return hasProjectChild ? "root" : "unknown";
+        });
+      });
+    });
+  }
+  function listExistingProjects(rootHandle){ return listSubdirNames(rootHandle); }
+
+  function readProjectMeta(dirHandle){
+    return readTextFileStrict(dirHandle, "project-meta.json", "project-meta.json", function(text){
+      var parsed = JSON.parse(text);
+      if (!parsed || typeof parsed !== "object") throw new Error("not a JSON object");
+      return {
+        no: String(parsed.no || ""),
+        name: String(parsed.name || ""),
+        contractor: String(parsed.contractor || ""),
+        projectManager: String(parsed.projectManager || "")
+      };
+    }).then(function(res){ return res.found ? res.value : null; });
+  }
+  function readJoineryItems(projectHandle){
+    return readJsonArrayFileStrict(projectHandle, "joinery-items.json", "joinery-items.json");
+  }
+
+  /* ---- shared joinery-status.json / joinery-schedule.json event
+     pipeline, READ-ONLY, no migration and no writes of any kind (this
+     app never creates a "Joinery Status"/"Joinery Schedule" events
+     folder -- if one isn't there yet, it just falls back to the legacy
+     flat-array file directly, same shape UTZLINE Projects' own reader
+     falls back to before its own migration runs). ---- */
+  function readJsonFileHandle(fh){
+    return fh.getFile().then(function(file){ return file.text(); }).then(function(text){
+      try{ var parsed = JSON.parse(text); return (parsed && typeof parsed === "object") ? parsed : null; }catch(e){ return null; }
+    }, function(){ return null; });
+  }
+  function listJsonFileHandlesIn(dirH){
+    if (!dirH || typeof dirH.values !== "function") return Promise.resolve([]);
+    var handles = [];
+    var iter = dirH.values();
+    function step(){
+      return iter.next().then(function(res){
+        if (res.done) return handles;
+        if (res.value && res.value.kind === "file" && /\.json$/i.test(res.value.name)) handles.push(res.value);
+        return step();
+      });
+    }
+    return step();
+  }
+  function listEventItemDirs(rootH){
+    if (!rootH || typeof rootH.values !== "function") return Promise.resolve([]);
+    var dirs = [];
+    var iter = rootH.values();
+    function step(){
+      return iter.next().then(function(res){
+        if (res.done) return dirs;
+        if (res.value && res.value.kind === "directory") dirs.push(res.value);
+        return step();
+      });
+    }
+    return step();
+  }
+  function getEventsBranchRootDir(projectHandle, branchName){
+    return projectHandle.getDirectoryHandle("Project Saves", { create: false }).then(function(psH){
+      return psH.getDirectoryHandle(branchName, { create: false });
+    }).then(function(h){ return h; }, function(err){
+      if (isNotFoundErr(err)) return null;
+      return Promise.reject(readFailedErr(branchName + " folder", err));
+    });
+  }
+  // Mirrors UTZLINE Projects' own foldJoineryStatusEvents exactly (same
+  // rank table, same "best status wins, full history kept").
+  function joineryStatusRank(status){
+    switch (status){
+      case "installed": return 6;
+      case "delivered": return 5;
+      case "manufactured": return 4;
+      case "machined": return 3;
+      case "in_manufacture": return 2;
+      case "measured": return 1;
+      default: return 0;
+    }
+  }
+  function foldJoineryStatusEvents(events){
+    if (!events || !events.length) return null;
+    var statusEvents = events.filter(function(e){ return e.kind === "status" && e.status; });
+    if (!statusEvents.length) return null;
+    var any = statusEvents[0];
+    var rec = { level: any.level || "", room: any.room || "", joineryId: any.joineryId || "" };
+    var best = null;
+    statusEvents.forEach(function(e){ if (!best || joineryStatusRank(e.status) > joineryStatusRank(best.status)) best = e; });
+    rec.status = best ? best.status : "";
+    return rec;
+  }
+  // Mirrors UTZLINE Projects' own foldJoinerySchedule -- an item's current
+  // schedule is just its single latest "set" event; a "clear" event (or no
+  // events at all) means no schedule.
+  function foldJoinerySchedule(events){
+    if (!events || !events.length) return null;
+    var latest = null;
+    events.forEach(function(e){ if (!latest || (e.at || "") > (latest.at || "")) latest = e; });
+    if (!latest || latest.kind === "clear") return null;
+    return {
+      level: latest.level || "", room: latest.room || "", joineryId: latest.joineryId || "",
+      requiredDeliveryDate: latest.requiredDeliveryDate || ""
     };
   }
-
-  function fmtDate(d){
-    var y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,"0"), day = String(d.getDate()).padStart(2,"0");
-    return y + "-" + m + "-" + day;
+  function readEventBranch(projectHandle, branchName, foldFn){
+    return getEventsBranchRootDir(projectHandle, branchName).then(function(rootH){
+      if (!rootH) return null; // no events folder at all -- caller falls back to the legacy flat file
+      return listEventItemDirs(rootH).then(function(dirs){
+        return Promise.all(dirs.map(function(dirH){
+          return listJsonFileHandlesIn(dirH).then(function(handles){
+            return Promise.all(handles.map(readJsonFileHandle));
+          }).then(function(events){
+            return foldFn(events.filter(function(e){ return e && typeof e === "object"; }));
+          });
+        })).then(function(list){ return list.filter(Boolean); });
+      });
+    });
+  }
+  function readJoineryStatuses(projectHandle){
+    return readEventBranch(projectHandle, "Joinery Status", foldJoineryStatusEvents).then(function(list){
+      if (list !== null) return list;
+      return readJsonArrayFileStrict(projectHandle, "joinery-status.json", "joinery-status.json");
+    });
+  }
+  function readJoinerySchedule(projectHandle){
+    return readEventBranch(projectHandle, "Joinery Schedule", foldJoinerySchedule).then(function(list){
+      if (list !== null) return list;
+      return readJsonArrayFileStrict(projectHandle, "joinery-schedule.json", "joinery-schedule.json");
+    });
+  }
+  function findByKey(list, level, room, joineryId){
+    for (var i = 0; i < list.length; i++){
+      var rec = list[i];
+      if (rec && rec.level === level && (rec.room || "") === (room || "") && (rec.joineryId || "") === (joineryId || "")) return rec;
+    }
+    return null;
   }
 
-  var STATUS_PIPELINE = ["created","measured","in_manufacture","machined","manufactured","delivered","installed"];
-  var STATUS_LABEL = {
-    created:"Created", measured:"Measured", in_manufacture:"In manufacture",
-    machined:"Machined", manufactured:"Manufactured", delivered:"Delivered", installed:"Installed"
-  };
-
-  var PROJECT_SEEDS = [
-    { no:"24-118", name:"Meadowbrook Residence",        contractor:"Corelli Construction",  projectManager:"Sarah Nguyen",  itemCount:11, seed:1001, minVal:2200,  maxVal:9800,  startOffsetMonths:-3 },
-    { no:"24-142", name:"Riverside Apartments Blk C",    contractor:"Anvex Build Group",     projectManager:"Marcus Webb",   itemCount:16, seed:2002, minVal:1800,  maxVal:8600,  startOffsetMonths:-2 },
-    { no:"25-003", name:"Harborview Offices",            contractor:"Solstice Projects",     projectManager:"Priya Raman",   itemCount:13, seed:3003, minVal:3200,  maxVal:16500, startOffsetMonths:-1 },
-    { no:"25-027", name:"Old Mill Boutique Hotel",       contractor:"Corelli Construction",  projectManager:"Sarah Nguyen",  itemCount:14, seed:4004, minVal:2600,  maxVal:12400, startOffsetMonths:0 },
-    { no:"25-055", name:"Fernwood Aged Care",             contractor:"Anvex Build Group",     projectManager:"Declan Ho",     itemCount:12, seed:5005, minVal:2000,  maxVal:9200,  startOffsetMonths:0 },
-    { no:"25-071", name:"Northgate Retail Fitout",       contractor:"Solstice Projects",     projectManager:"Priya Raman",   itemCount:9,  seed:6006, minVal:1500,  maxVal:7000,  startOffsetMonths:1 }
-  ];
-
-  var TODAY = new Date(); TODAY.setHours(0,0,0,0);
-
-  function buildSampleProjects(){
-    return PROJECT_SEEDS.map(function(seedDef){
-      var rnd = mulberry32(seedDef.seed);
-      var items = [];
-      for (var i = 0; i < seedDef.itemCount; i++){
-        var joineryId = "J." + seedDef.no.slice(-3) + "." + String(i+1).padStart(3,"0");
-        var rooms = ["Kitchen","Bathroom","Laundry","Robe","Study","Reception","Bar","Vanity","Pantry","Ensuite"];
-        var description = rooms[i % rooms.length] + " joinery";
-        var dollarValue = Math.round((seedDef.minVal + rnd() * (seedDef.maxVal - seedDef.minVal)) / 50) * 50;
-
-        // Spread required delivery dates from a few months in the past
-        // (already progressed) out to +11 months from today (forecast-only).
-        var monthOffset = Math.floor(seedDef.startOffsetMonths + rnd() * 13); // roughly -3..+10 range depending on project
-        var day = 3 + Math.floor(rnd() * 24);
-        var due = new Date(TODAY.getFullYear(), TODAY.getMonth() + monthOffset, day);
-
-        // Status derived from how far past/future the due date is, using a
-        // smooth tapering probability rather than hard day thresholds --
-        // real projects run some items ahead of schedule (already
-        // delivered/installed even though their required delivery date is
-        // still a few months out), so Delivered/Installed have a genuine,
-        // gradually-tapering presence across most of the 12-month forward
-        // window instead of only showing up in month 1-2 and flatlining at
-        // zero for the rest of the year.
-        var daysFromToday = Math.round((due - TODAY) / 86400000);
-        var pInstalled = Math.max(0.03, Math.min(0.92, 0.85 - daysFromToday / 220));
-        var pDeliveredIfNotInstalled = Math.max(0.05, Math.min(0.55, 0.5 - daysFromToday / 320));
-        var status;
-        if (rnd() < pInstalled){
-          status = "installed";
-        } else if (rnd() < pDeliveredIfNotInstalled){
-          status = "delivered";
-        } else if (daysFromToday < 30){
-          status = rnd() < 0.5 ? "manufactured" : "machined";
-        } else if (daysFromToday < 90){
-          status = rnd() < 0.5 ? "in_manufacture" : "manufactured";
-        } else {
-          status = rnd() < 0.5 ? "created" : "measured";
-        }
-
-        items.push({
-          joineryId: joineryId,
-          description: description,
-          dollarValue: dollarValue,
-          status: status,
-          requiredDeliveryDate: fmtDate(due)
-        });
-      }
+  function readProjectFull(projectHandle, folderName){
+    return Promise.all([
+      readProjectMeta(projectHandle),
+      readJoineryItems(projectHandle),
+      readJoineryStatuses(projectHandle),
+      readJoinerySchedule(projectHandle)
+    ]).then(function(r){
+      var meta = r[0], rawItems = r[1], statusList = r[2], scheduleList = r[3];
+      var items = rawItems.map(function(it){
+        var statusRec = findByKey(statusList, it.level, it.room, it.joineryId);
+        var scheduleRec = findByKey(scheduleList, it.level, it.room, it.joineryId);
+        return {
+          joineryId: it.joineryId || "",
+          description: it.description || "",
+          dollarValue: Number(it.dollarValue) || 0,
+          status: (statusRec && statusRec.status) || "created",
+          requiredDeliveryDate: (scheduleRec && scheduleRec.requiredDeliveryDate) || ""
+        };
+      });
       return {
-        no: seedDef.no,
-        name: seedDef.name,
-        contractor: seedDef.contractor,
-        projectManager: seedDef.projectManager,
+        folderName: folderName,
+        no: (meta && meta.no) || "",
+        name: (meta && meta.name) || folderName,
+        contractor: (meta && meta.contractor) || "",
+        projectManager: (meta && meta.projectManager) || "",
         items: items
       };
     });
   }
+  function readAllProjects(rootHandle){
+    return listExistingProjects(rootHandle).then(function(names){
+      return Promise.all(names.map(function(name){
+        return rootHandle.getDirectoryHandle(name, { create: false }).then(function(projectHandle){
+          return readProjectFull(projectHandle, name).then(function(p){ return { ok: true, project: p }; });
+        }).catch(function(err){ return { ok: false, name: name, err: err }; });
+      }));
+    }).then(function(results){
+      var projects = [], failed = [];
+      results.forEach(function(r){ if (r.ok) projects.push(r.project); else failed.push(r.name); });
+      return { projects: projects, failed: failed };
+    });
+  }
 
-  var PROJECTS = buildSampleProjects();
+  /* ============================================================
+   * FOLDER PICKER + PERSISTENCE (own IndexedDB, "read" mode only --
+   * this app never asks for or needs "readwrite")
+   * ============================================================ */
+  var DB_NAME = "utzline-dollar-summary-db", STORE = "session";
+  var idbConnP = null;
+  function idbOpen(){
+    if (idbConnP) return idbConnP;
+    idbConnP = new Promise(function(res, rej){
+      try{
+        var r = indexedDB.open(DB_NAME, 1);
+        r.onupgradeneeded = function(){ r.result.createObjectStore(STORE); };
+        r.onsuccess = function(){
+          var db = r.result;
+          db.onversionchange = function(){ db.close(); idbConnP = null; };
+          db.onclose = function(){ idbConnP = null; };
+          res(db);
+        };
+        r.onerror = function(){ idbConnP = null; rej(r.error); };
+      }catch(e){ idbConnP = null; rej(e); }
+    });
+    return idbConnP;
+  }
+  function idbSet(key, val){
+    return idbOpen().then(function(db){
+      return new Promise(function(res, rej){
+        var tx = db.transaction(STORE, "readwrite");
+        tx.objectStore(STORE).put(val, key);
+        tx.oncomplete = function(){ res(); };
+        tx.onerror = function(){ rej(tx.error); };
+      });
+    });
+  }
+  function idbGet(key){
+    return idbOpen().then(function(db){
+      return new Promise(function(res, rej){
+        var tx = db.transaction(STORE, "readonly");
+        var rq = tx.objectStore(STORE).get(key);
+        rq.onsuccess = function(){ res(rq.result); };
+        rq.onerror = function(){ rej(rq.error); };
+      });
+    });
+  }
+  function folderPickerErrorMessage(err){
+    if (err && err.name === "SecurityError"){
+      return "Folder access isn't available in this embedded preview. Open the self-hosted or installed version of this app to use your Projects folder.";
+    }
+    return "Couldn't open the folder picker -- try again.";
+  }
+
+  var rootHandle = null, rootName = "";
+  var setupError = document.getElementById("setupError");
+  var reconnectName = document.getElementById("reconnectName");
+  var chooseRootBtn = document.getElementById("chooseRootBtn");
+  var chooseDifferentRootBtn = document.getElementById("chooseDifferentRootBtn");
+  var reconnectBtn = document.getElementById("reconnectBtn");
+  var reconnectChooseDifferentBtn = document.getElementById("reconnectChooseDifferentBtn");
+
+  function pickRootFolder(){
+    return window.showDirectoryPicker({ id: "utzline-dollar-summary-root", mode: "read" }).then(function(handle){
+      return detectFolderShape(handle).then(function(shape){
+        if (shape === "level" || shape === "project"){
+          setupError.hidden = false;
+          setupError.textContent = "That looks like a single " + (shape === "level" ? "level's" : "project's") + " own folder, not your Projects folder. Choose the top-level folder that contains all your projects.";
+          return;
+        }
+        rootHandle = handle; rootName = handle.name;
+        return idbSet("rootHandle", handle).catch(function(err){
+          console.error("Remembering the Projects folder failed (this session carries on):", err);
+        }).then(function(){
+          return loadAndRender();
+        });
+      });
+    });
+  }
+  chooseRootBtn.addEventListener("click", function(){
+    setupError.hidden = true;
+    pickRootFolder().catch(function(err){
+      if (err && err.name === "AbortError") return;
+      console.error("Choose Projects folder failed:", err);
+      setupError.hidden = false;
+      setupError.textContent = folderPickerErrorMessage(err);
+    });
+  });
+  chooseDifferentRootBtn.addEventListener("click", function(){
+    pickRootFolder().catch(function(err){
+      if (err && err.name === "AbortError") return;
+      console.error("Choose Projects folder failed:", err);
+      showToast(folderPickerErrorMessage(err));
+    });
+  });
+  reconnectChooseDifferentBtn.addEventListener("click", function(){
+    pickRootFolder().catch(function(err){
+      if (err && err.name === "AbortError") return;
+      console.error("Choose Projects folder failed:", err);
+      showToast(folderPickerErrorMessage(err));
+    });
+  });
+  reconnectBtn.addEventListener("click", function(){
+    if (!rootHandle) return;
+    rootHandle.requestPermission({ mode: "read" }).then(function(perm){
+      if (perm !== "granted") return;
+      loadAndRender();
+    }).catch(function(err){
+      console.error("Reconnect failed:", err);
+      showToast("Couldn't reconnect — try Choose a different folder.");
+    });
+  });
 
   /* ============================================================
    * MONTH WINDOW -- computed dynamically from "today" every time
    * the app opens, never hardcoded, so it stays correct as time
    * passes. 12 months starting with the current month.
    * ============================================================ */
+  var TODAY = new Date(); TODAY.setHours(0,0,0,0);
   var MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   function buildMonthWindow(){
     var months = [];
@@ -586,9 +976,12 @@
     return months;
   }
   var MONTHS = buildMonthWindow();
-  function monthKeyOf(dateStr){
-    return dateStr.slice(0,7);
-  }
+  function monthKeyOf(dateStr){ return dateStr.slice(0,7); }
+
+  var STATUS_LABEL = {
+    created:"Created", measured:"Check measured", in_manufacture:"In manufacture",
+    machined:"Machined", manufactured:"Ready to dispatch", delivered:"Delivered", installed:"Installed"
+  };
 
   /* ============================================================
    * EARNED-VALUE AGGREGATION
@@ -598,15 +991,15 @@
     MONTHS.forEach(function(mo){ m[mo.key] = { forecast:0, delivered:0, installed:0 }; });
     return m;
   }
-
   function aggregateProject(project){
     var buckets = emptyMonthlyBuckets();
-    var totals = { contract:0, deliveredToDate:0, installedToDate:0 };
+    var totals = { contract:0, deliveredToDate:0, installedToDate:0, unscheduled:0 };
     project.items.forEach(function(item){
-      var key = monthKeyOf(item.requiredDeliveryDate);
       totals.contract += item.dollarValue;
       if (item.status === "installed"){ totals.installedToDate += item.dollarValue; }
       else if (item.status === "delivered"){ totals.deliveredToDate += item.dollarValue * 0.75; }
+      if (!item.requiredDeliveryDate){ totals.unscheduled += item.dollarValue; return; }
+      var key = monthKeyOf(item.requiredDeliveryDate);
       if (!buckets[key]) return; // outside the 12-month window
       buckets[key].forecast += item.dollarValue;
       if (item.status === "delivered"){
@@ -618,18 +1011,22 @@
     return { buckets: buckets, totals: totals };
   }
 
-  var PROJECT_AGG = {}; // no -> {buckets, totals}
-  PROJECTS.forEach(function(p){ PROJECT_AGG[p.no] = aggregateProject(p); });
-
+  var PROJECTS = [];
+  var PROJECT_AGG = {}; // folderName -> {buckets, totals}
   var COMPANY_BUCKETS = emptyMonthlyBuckets();
-  Object.keys(PROJECT_AGG).forEach(function(no){
-    var b = PROJECT_AGG[no].buckets;
-    MONTHS.forEach(function(mo){
-      COMPANY_BUCKETS[mo.key].forecast += b[mo.key].forecast;
-      COMPANY_BUCKETS[mo.key].delivered += b[mo.key].delivered;
-      COMPANY_BUCKETS[mo.key].installed += b[mo.key].installed;
+  function rebuildAggregates(){
+    PROJECT_AGG = {};
+    PROJECTS.forEach(function(p){ PROJECT_AGG[p.folderName] = aggregateProject(p); });
+    COMPANY_BUCKETS = emptyMonthlyBuckets();
+    PROJECTS.forEach(function(p){
+      var b = PROJECT_AGG[p.folderName].buckets;
+      MONTHS.forEach(function(mo){
+        COMPANY_BUCKETS[mo.key].forecast += b[mo.key].forecast;
+        COMPANY_BUCKETS[mo.key].delivered += b[mo.key].delivered;
+        COMPANY_BUCKETS[mo.key].installed += b[mo.key].installed;
+      });
     });
-  });
+  }
 
   /* ============================================================
    * FORMATTING
@@ -648,12 +1045,16 @@
    * NAVIGATION
    * ============================================================ */
   var screens = {
+    setup: document.getElementById("screenSetup"),
+    reconnect: document.getElementById("screenReconnect"),
     home: document.getElementById("screenHome"),
     all: document.getElementById("screenAll"),
     project: document.getElementById("screenProject")
   };
+  var currentScreenName = null;
   function showScreen(name){
     Object.keys(screens).forEach(function(k){ screens[k].hidden = (k !== name); });
+    currentScreenName = name;
     window.scrollTo(0,0);
   }
   document.querySelectorAll("[data-nav]").forEach(function(btn){
@@ -661,11 +1062,11 @@
   });
 
   /* ============================================================
-   * CHART -- hand-rolled inline SVG multi-line chart, per the
-   * dataviz skill: 2px lines/round joins, >=8px ringed markers,
-   * hairline recessive gridlines, legend with line-key swatches,
-   * crosshair + one shared tooltip. Palette validated (see
-   * top-of-file comment).
+   * CHART -- hand-rolled inline SVG grouped bar chart, per the
+   * dataviz skill: rounded bar ends, hairline recessive gridlines,
+   * legend with filled swatches, crosshair + one shared tooltip per
+   * month group (full-size charts only -- small multiples are
+   * static, "Open" jumps to the interactive version).
    * ============================================================ */
   var SERIES_DEFS = [
     { key:"forecast",  label:"Forecast",         color:"var(--series-forecast)"  },
@@ -691,8 +1092,8 @@
       var el = document.createElement("div");
       el.className = "legend-item";
       var key = document.createElement("span");
-      key.className = "legend-key";
-      key.style.borderColor = s.color;
+      key.className = "legend-key fill";
+      key.style.background = s.color;
       var lbl = document.createElement("span");
       lbl.textContent = s.label;
       el.appendChild(key); el.appendChild(lbl);
@@ -707,17 +1108,26 @@
     return el;
   }
 
-  function renderLineChart(wrapEl, buckets){
+  // opts.compact = true for the All Projects "monthly summary by project"
+  // small multiples: smaller canvas, sparser labels, no hover layer (a
+  // static preview -- "Open" gives the full interactive chart).
+  function renderBarChart(wrapEl, buckets, opts){
+    opts = opts || {};
+    var compact = !!opts.compact;
     wrapEl.innerHTML = "";
-    var W = 960, H = 320;
-    var padL = 56, padR = 16, padT = 16, padB = 34;
+    var W = compact ? 460 : 960;
+    var H = compact ? 190 : 320;
+    var padL = compact ? 34 : 56;
+    var padR = compact ? 8 : 16;
+    var padT = compact ? 8 : 16;
+    var padB = compact ? 22 : 34;
     var plotW = W - padL - padR, plotH = H - padT - padB;
+    var tickCount = compact ? 2 : 4;
 
     var values = MONTHS.map(function(mo){ return buckets[mo.key]; });
     var maxRaw = 0;
     values.forEach(function(v){ maxRaw = Math.max(maxRaw, v.forecast, v.delivered, v.installed); });
     var yMax = niceMax(maxRaw || 1000);
-    var tickCount = 4;
 
     var svg = svgEl("svg", { viewBox:"0 0 " + W + " " + H, role:"img",
       "aria-label":"Monthly forecast, delivered and installed value over the next 12 months" });
@@ -725,54 +1135,57 @@
     svg.style.height = "auto";
     svg.style.display = "block";
 
-    function xFor(i){ return padL + (MONTHS.length === 1 ? plotW/2 : (i/(MONTHS.length-1)) * plotW); }
     function yFor(v){ return padT + plotH - (v / yMax) * plotH; }
+    var groupW = plotW / MONTHS.length;
 
-    // gridlines + y ticks
     for (var t = 0; t <= tickCount; t++){
       var val = (yMax / tickCount) * t;
       var y = yFor(val);
       svg.appendChild(svgEl("line", { x1:padL, x2:W-padR, y1:y, y2:y, stroke:"var(--chart-grid)", "stroke-width":"1" }));
-      var lbl = svgEl("text", { x:padL-8, y:y+4, "text-anchor":"end", "font-size":"11", fill:"var(--chart-muted)" });
-      lbl.textContent = moneyCompact(val);
-      svg.appendChild(lbl);
+      if (!compact || t === 0 || t === tickCount){
+        var lbl = svgEl("text", { x:padL-6, y:y+4, "text-anchor":"end", "font-size": compact ? "9" : "11", fill:"var(--chart-muted)" });
+        lbl.textContent = moneyCompact(val);
+        svg.appendChild(lbl);
+      }
     }
-    // baseline
     svg.appendChild(svgEl("line", { x1:padL, x2:W-padR, y1:padT+plotH, y2:padT+plotH, stroke:"var(--chart-baseline)", "stroke-width":"1" }));
 
-    // x labels (every other month if tight)
+    var labelEvery = compact ? 3 : (MONTHS.length > 8 ? 2 : 1);
     MONTHS.forEach(function(mo, i){
-      var showEvery = MONTHS.length > 8 ? 2 : 1;
-      if (i % showEvery !== 0 && i !== MONTHS.length-1) return;
-      var lbl = svgEl("text", { x:xFor(i), y:H-10, "text-anchor":"middle", "font-size":"11", fill:"var(--chart-muted)" });
+      if (i % labelEvery !== 0 && i !== MONTHS.length-1) return;
+      var cx = padL + (i+0.5)*groupW;
+      var lbl = svgEl("text", { x:cx, y:H-(compact?6:10), "text-anchor":"middle", "font-size": compact?"9":"11", fill:"var(--chart-muted)" });
       lbl.textContent = mo.shortLabel;
       svg.appendChild(lbl);
     });
 
-    // series lines + markers
-    SERIES_DEFS.forEach(function(s){
-      var pts = values.map(function(v,i){ return [xFor(i), yFor(v[s.key])]; });
-      var d = pts.map(function(p,i){ return (i===0?"M":"L") + p[0].toFixed(1) + "," + p[1].toFixed(1); }).join(" ");
-      svg.appendChild(svgEl("path", { d:d, fill:"none", stroke:s.color, "stroke-width":"2", "stroke-linejoin":"round", "stroke-linecap":"round" }));
-      pts.forEach(function(p){
-        svg.appendChild(svgEl("circle", { cx:p[0], cy:p[1], r:"5.5", fill:s.color, stroke:"var(--chart-surface)", "stroke-width":"2" }));
+    var barGap = compact ? 1 : 2;
+    var groupPad = compact ? 2 : 5;
+    var barW = Math.max(1, (groupW - groupPad*2 - barGap*2) / 3);
+    var groupBounds = [];
+
+    MONTHS.forEach(function(mo, i){
+      var v = values[i];
+      var gx0 = padL + i*groupW + groupPad;
+      SERIES_DEFS.forEach(function(s, si){
+        var val = v[s.key];
+        var bx = gx0 + si*(barW+barGap);
+        var by = yFor(val);
+        var bh = (padT+plotH) - by;
+        if (bh < 0) bh = 0;
+        svg.appendChild(svgEl("rect", {
+          x:bx.toFixed(1), y:by.toFixed(1), width:barW.toFixed(1), height:bh.toFixed(1),
+          rx:"3", ry:"3", fill:s.color
+        }));
       });
-      // direct end-label on the last point (sparing labeling, per skill)
-      var last = pts[pts.length-1];
-      var endLbl = svgEl("text", { x:last[0]+8, y:last[1]+4, "font-size":"11", fill:"var(--chart-ink-secondary)", "font-weight":"600" });
-      endLbl.textContent = moneyCompact(values[values.length-1][s.key]);
-      if (last[0] < W - padR - 60){ svg.appendChild(endLbl); }
+      groupBounds.push({ x0: padL + i*groupW, x1: padL + (i+1)*groupW });
     });
 
-    // crosshair (hidden until hover)
-    var crosshair = svgEl("line", { x1:padL, x2:padL, y1:padT, y2:padT+plotH, stroke:"var(--chart-muted)", "stroke-width":"1", "stroke-dasharray":"3,3", opacity:"0" });
-    svg.appendChild(crosshair);
+    wrapEl.appendChild(svg);
+    if (compact) return; // static preview -- no hover layer
 
-    // hit-area overlay (bigger than the marks, per interaction.md)
     var hit = svgEl("rect", { x:padL, y:padT, width:plotW, height:plotH, fill:"transparent" });
     svg.appendChild(hit);
-
-    wrapEl.appendChild(svg);
 
     var tooltip = document.createElement("div");
     tooltip.className = "chart-tooltip";
@@ -780,47 +1193,36 @@
     wrapEl.style.position = "relative";
     wrapEl.appendChild(tooltip);
 
-    function showTooltipAt(i, clientX, clientY){
+    function showTooltipAt(i){
       var mo = MONTHS[i];
       var v = values[i];
-      crosshair.setAttribute("x1", xFor(i)); crosshair.setAttribute("x2", xFor(i)); crosshair.setAttribute("opacity","1");
       var rows = SERIES_DEFS.map(function(s){
-        return '<div class="tt-row"><span class="k" style="border-color:'+s.color+'"></span><span>'+s.label+'</span><span class="v">'+money(v[s.key])+'</span></div>';
+        return '<div class="tt-row"><span class="k fillkey" style="background:'+s.color+'"></span><span>'+s.label+'</span><span class="v">'+money(v[s.key])+'</span></div>';
       }).join("");
       tooltip.innerHTML = '<div class="tt-month"></div>' + rows;
       tooltip.querySelector(".tt-month").textContent = mo.label;
       var wrapRect = wrapEl.getBoundingClientRect();
       var svgRect = svg.getBoundingClientRect();
-      var xRatio = xFor(i) / W;
-      var px = svgRect.left - wrapRect.left + xRatio * svgRect.width;
-      var py = svgRect.top - wrapRect.top + (yFor(Math.max(v.forecast,v.delivered,v.installed))/H) * svgRect.height;
+      var cxRatio = (padL + (i+0.5)*groupW) / W;
+      var px = svgRect.left - wrapRect.left + cxRatio * svgRect.width;
+      var topVal = Math.max(v.forecast, v.delivered, v.installed);
+      var py = svgRect.top - wrapRect.top + (yFor(topVal)/H) * svgRect.height;
       tooltip.style.left = px + "px";
       tooltip.style.top = Math.max(py, 10) + "px";
       tooltip.style.display = "block";
     }
-    function hideTooltip(){
-      tooltip.style.display = "none";
-      crosshair.setAttribute("opacity","0");
-    }
-    function nearestIndexFromClientX(clientX){
+    function hideTooltip(){ tooltip.style.display = "none"; }
+    function indexFromClientX(clientX){
       var svgRect = svg.getBoundingClientRect();
       var relX = ((clientX - svgRect.left) / svgRect.width) * W;
-      var best = 0, bestDist = Infinity;
-      for (var i=0;i<MONTHS.length;i++){
-        var dist = Math.abs(xFor(i) - relX);
-        if (dist < bestDist){ bestDist = dist; best = i; }
+      for (var i = 0; i < groupBounds.length; i++){
+        if (relX >= groupBounds[i].x0 && relX < groupBounds[i].x1) return i;
       }
-      return best;
+      return relX < padL ? 0 : MONTHS.length - 1;
     }
-    hit.addEventListener("pointermove", function(ev){
-      var i = nearestIndexFromClientX(ev.clientX);
-      showTooltipAt(i, ev.clientX, ev.clientY);
-    });
+    hit.addEventListener("pointermove", function(ev){ showTooltipAt(indexFromClientX(ev.clientX)); });
     hit.addEventListener("pointerleave", hideTooltip);
-    hit.addEventListener("pointerdown", function(ev){
-      var i = nearestIndexFromClientX(ev.clientX);
-      showTooltipAt(i, ev.clientX, ev.clientY);
-    });
+    hit.addEventListener("pointerdown", function(ev){ showTooltipAt(indexFromClientX(ev.clientX)); });
   }
 
   /* ============================================================
@@ -894,19 +1296,21 @@
    * ============================================================ */
   function renderHome(){
     var list = document.getElementById("projectList");
+    var empty = document.getElementById("projectListEmpty");
     list.innerHTML = "";
+    empty.hidden = PROJECTS.length > 0;
     PROJECTS.forEach(function(p){
-      var agg = PROJECT_AGG[p.no];
+      var agg = PROJECT_AGG[p.folderName];
       var btn = document.createElement("button");
       btn.className = "list-item";
       btn.innerHTML =
         '<div class="li-main">' +
-          '<span class="li-title">' + p.no + ' — ' + p.name + '</span>' +
-          '<span class="li-sub">Builder: ' + p.contractor + ' &nbsp;·&nbsp; PM: ' + p.projectManager + '</span>' +
+          '<span class="li-title">' + escapeHtml((p.no ? p.no + " — " : "") + p.name) + '</span>' +
+          '<span class="li-sub">Builder: ' + escapeHtml(p.contractor || "—") + ' &nbsp;·&nbsp; PM: ' + escapeHtml(p.projectManager || "—") + '</span>' +
         '</div>' +
         '<span class="li-value">' + money(agg.totals.contract) + '</span>' +
         '<span class="chev">›</span>';
-      btn.addEventListener("click", function(){ openProject(p.no); });
+      btn.addEventListener("click", function(){ openProject(p.folderName); });
       list.appendChild(btn);
     });
   }
@@ -918,11 +1322,50 @@
    * ============================================================ */
   var allSelectedMonths = new Set(MONTHS.map(function(m){ return m.key; }));
 
+  function tile(label, value, cls){
+    return '<div class="stat-tile ' + cls + '"><div class="stat-label">' + label + '</div><div class="stat-value">' + value + '</div></div>';
+  }
+
+  function renderProjectMiniGrid(){
+    var grid = document.getElementById("allProjectMiniGrid");
+    grid.innerHTML = "";
+    if (!PROJECTS.length){
+      grid.innerHTML = '<div class="empty-note">No projects to summarize yet.</div>';
+      return;
+    }
+    PROJECTS.forEach(function(p){
+      var agg = PROJECT_AGG[p.folderName];
+      var card = document.createElement("div");
+      card.className = "mini-chart-card";
+      var head = document.createElement("div");
+      head.className = "mini-chart-head";
+      head.innerHTML =
+        '<span class="name">' + escapeHtml((p.no ? p.no + " — " : "") + p.name) + '</span>' +
+        '<span class="value">' + money(agg.totals.contract) + '</span>';
+      card.appendChild(head);
+      var chartWrap = document.createElement("div");
+      card.appendChild(chartWrap);
+      if (agg.totals.unscheduled > 0){
+        var note = document.createElement("div");
+        note.className = "mini-unscheduled-note";
+        note.textContent = money(agg.totals.unscheduled) + " not yet scheduled — not shown above.";
+        card.appendChild(note);
+      }
+      var openBtn = document.createElement("button");
+      openBtn.className = "btn secondary sm";
+      openBtn.style.marginTop = "8px";
+      openBtn.textContent = "Open";
+      openBtn.addEventListener("click", function(){ openProject(p.folderName); });
+      card.appendChild(openBtn);
+      grid.appendChild(card);
+      renderBarChart(chartWrap, agg.buckets, { compact: true });
+    });
+  }
+
   function renderAll(){
-    // stat row: company totals
     var companyTotals = { contract:0, deliveredToDate:0, installedToDate:0 };
-    Object.keys(PROJECT_AGG).forEach(function(no){
-      var t = PROJECT_AGG[no].totals;
+    PROJECTS.forEach(function(p){
+      var t = PROJECT_AGG[p.folderName].totals;
       companyTotals.contract += t.contract;
       companyTotals.deliveredToDate += t.deliveredToDate;
       companyTotals.installedToDate += t.installedToDate;
@@ -934,18 +1377,20 @@
       tile("Installed to date (100% earned)", money(companyTotals.installedToDate), "installed");
 
     renderLegend(document.getElementById("allChartLegend"));
-    renderLineChart(document.getElementById("allChartWrap"), COMPANY_BUCKETS);
+    renderBarChart(document.getElementById("allChartWrap"), COMPANY_BUCKETS);
+
+    renderProjectMiniGrid();
 
     var tbody = document.querySelector("#allProjectsTable tbody");
     tbody.innerHTML = "";
     PROJECTS.forEach(function(p){
-      var agg = PROJECT_AGG[p.no];
+      var agg = PROJECT_AGG[p.folderName];
       var tr = document.createElement("tr");
       tr.innerHTML =
-        "<td>" + p.no + "</td>" +
-        "<td>" + p.name + "</td>" +
-        "<td>" + p.contractor + "</td>" +
-        "<td>" + p.projectManager + "</td>" +
+        "<td>" + escapeHtml(p.no) + "</td>" +
+        "<td>" + escapeHtml(p.name) + "</td>" +
+        "<td>" + escapeHtml(p.contractor) + "</td>" +
+        "<td>" + escapeHtml(p.projectManager) + "</td>" +
         "<td class=\"num\">" + money(agg.totals.contract) + "</td>" +
         "<td class=\"num\">" + money(agg.totals.deliveredToDate) + "</td>" +
         "<td class=\"num\">" + money(agg.totals.installedToDate) + "</td>" +
@@ -954,7 +1399,7 @@
       var openBtn = document.createElement("button");
       openBtn.className = "btn secondary sm";
       openBtn.textContent = "Open";
-      openBtn.addEventListener("click", function(){ openProject(p.no); });
+      openBtn.addEventListener("click", function(){ openProject(p.folderName); });
       openTd.appendChild(openBtn);
       tbody.appendChild(tr);
     });
@@ -970,13 +1415,9 @@
     refreshMonthlyBits();
   }
 
-  function tile(label, value, cls){
-    return '<div class="stat-tile ' + cls + '"><div class="stat-label">' + label + '</div><div class="stat-value">' + value + '</div></div>';
-  }
-
   document.getElementById("exportAllBtn").addEventListener("click", function(){
     var months = MONTHS.filter(function(mo){ return allSelectedMonths.has(mo.key); });
-    if (!months.length){ alert("Tick at least one month to export."); return; }
+    if (!months.length){ showToast("Tick at least one month to export."); return; }
     var summaryRows = [["Month","Forecast","Delivered (75%)","Installed (100%)"]];
     months.forEach(function(mo){
       var v = COMPANY_BUCKETS[mo.key];
@@ -984,13 +1425,13 @@
     });
     var sheets = [{ name:"All projects", rows: summaryRows }];
     PROJECTS.forEach(function(p){
-      var agg = PROJECT_AGG[p.no];
+      var agg = PROJECT_AGG[p.folderName];
       var rows = [["Month","Forecast","Delivered (75%)","Installed (100%)"]];
       months.forEach(function(mo){
         var v = agg.buckets[mo.key];
         rows.push([mo.label, v.forecast, v.delivered, v.installed]);
       });
-      sheets.push({ name: p.no.slice(0,28), rows: rows });
+      sheets.push({ name: (p.no || p.name || p.folderName).slice(0,28), rows: rows });
     });
     exportWorkbook("UTZLINE-dollar-summary-all-projects.xlsx", sheets);
   });
@@ -998,15 +1439,18 @@
   /* ============================================================
    * PROJECT DETAIL SCREEN
    * ============================================================ */
-  var projSelectedMonths = {}; // no -> Set
+  var projSelectedMonths = {}; // folderName -> Set
+  var currentProjectFolder = null;
 
-  function openProject(no){
-    if (!projSelectedMonths[no]) projSelectedMonths[no] = new Set(MONTHS.map(function(m){ return m.key; }));
-    var p = PROJECTS.find(function(pp){ return pp.no === no; });
-    var agg = PROJECT_AGG[no];
+  function openProject(folderName){
+    currentProjectFolder = folderName;
+    if (!projSelectedMonths[folderName]) projSelectedMonths[folderName] = new Set(MONTHS.map(function(m){ return m.key; }));
+    var p = PROJECTS.find(function(pp){ return pp.folderName === folderName; });
+    if (!p) return;
+    var agg = PROJECT_AGG[folderName];
 
-    document.getElementById("projTitle").textContent = p.no + " — " + p.name;
-    document.getElementById("projSub").textContent = "Builder: " + p.contractor + "  ·  Project manager: " + p.projectManager;
+    document.getElementById("projTitle").textContent = (p.no ? p.no + " — " : "") + p.name;
+    document.getElementById("projSub").textContent = "Builder: " + (p.contractor || "—") + "  ·  Project manager: " + (p.projectManager || "—");
 
     var statRow = document.getElementById("projStatRow");
     statRow.innerHTML =
@@ -1014,31 +1458,42 @@
       tile("Delivered to date (75% earned)", money(agg.totals.deliveredToDate), "delivered") +
       tile("Installed to date (100% earned)", money(agg.totals.installedToDate), "installed");
 
+    var unschedNote = document.getElementById("projUnscheduledNote");
+    if (agg.totals.unscheduled > 0){
+      unschedNote.hidden = false;
+      unschedNote.textContent = money(agg.totals.unscheduled) + " of this project's contract value has no required delivery date set yet, so it isn't included in any month below.";
+    } else {
+      unschedNote.hidden = true;
+    }
+
     renderLegend(document.getElementById("projChartLegend"));
-    renderLineChart(document.getElementById("projChartWrap"), agg.buckets);
+    renderBarChart(document.getElementById("projChartWrap"), agg.buckets);
 
     function refreshMonthlyBits(){
-      renderMonthPicker(document.getElementById("projMonthPicker"), projSelectedMonths[no], refreshMonthlyBits);
-      renderMonthlyTable(document.querySelector("#projMonthlyTable tbody"), agg.buckets, projSelectedMonths[no], refreshMonthlyBits);
+      renderMonthPicker(document.getElementById("projMonthPicker"), projSelectedMonths[folderName], refreshMonthlyBits);
+      renderMonthlyTable(document.querySelector("#projMonthlyTable tbody"), agg.buckets, projSelectedMonths[folderName], refreshMonthlyBits);
     }
     refreshMonthlyBits();
 
     var itemsBody = document.querySelector("#projItemsTable tbody");
     itemsBody.innerHTML = "";
-    p.items.slice().sort(function(a,b){ return a.requiredDeliveryDate < b.requiredDeliveryDate ? -1 : 1; }).forEach(function(item){
+    p.items.slice().sort(function(a,b){
+      var da = a.requiredDeliveryDate || "9999", db = b.requiredDeliveryDate || "9999";
+      return da < db ? -1 : da > db ? 1 : 0;
+    }).forEach(function(item){
       var tr = document.createElement("tr");
       tr.innerHTML =
-        "<td>" + item.joineryId + "</td>" +
-        "<td>" + item.description + "</td>" +
-        "<td>" + item.requiredDeliveryDate + "</td>" +
-        "<td>" + STATUS_LABEL[item.status] + "</td>" +
+        "<td>" + escapeHtml(item.joineryId) + "</td>" +
+        "<td>" + escapeHtml(item.description) + "</td>" +
+        "<td>" + (item.requiredDeliveryDate ? escapeHtml(item.requiredDeliveryDate) : "<span style=\"color:var(--muted)\">—</span>") + "</td>" +
+        "<td>" + escapeHtml(STATUS_LABEL[item.status] || item.status) + "</td>" +
         "<td class=\"num\">" + money(item.dollarValue) + "</td>";
       itemsBody.appendChild(tr);
     });
 
     document.getElementById("exportProjBtn").onclick = function(){
-      var months = MONTHS.filter(function(mo){ return projSelectedMonths[no].has(mo.key); });
-      if (!months.length){ alert("Tick at least one month to export."); return; }
+      var months = MONTHS.filter(function(mo){ return projSelectedMonths[folderName].has(mo.key); });
+      if (!months.length){ showToast("Tick at least one month to export."); return; }
       var rows = [["Month","Forecast","Delivered (75%)","Installed (100%)"]];
       months.forEach(function(mo){
         var v = agg.buckets[mo.key];
@@ -1046,9 +1501,9 @@
       });
       var itemRows = [["Joinery ID","Description","Required delivery","Status","Dollar value"]];
       p.items.forEach(function(item){
-        itemRows.push([item.joineryId, item.description, item.requiredDeliveryDate, STATUS_LABEL[item.status], item.dollarValue]);
+        itemRows.push([item.joineryId, item.description, item.requiredDeliveryDate, STATUS_LABEL[item.status] || item.status, item.dollarValue]);
       });
-      exportWorkbook("UTZLINE-dollar-summary-" + p.no + ".xlsx", [
+      exportWorkbook("UTZLINE-dollar-summary-" + (p.no || p.folderName) + ".xlsx", [
         { name:"Monthly breakdown", rows: rows },
         { name:"Joinery items", rows: itemRows }
       ]);
@@ -1058,9 +1513,82 @@
   }
 
   /* ============================================================
-   * INIT
+   * LOAD + REFRESH
    * ============================================================ */
-  renderHome();
+  var homeRefreshNote = document.getElementById("homeRefreshNote");
+  var homeLoadError = document.getElementById("homeLoadError");
+  var refreshBtn = document.getElementById("refreshBtn");
+  var loading = false;
+
+  function loadAndRender(){
+    if (!rootHandle || loading) return Promise.resolve();
+    loading = true;
+    homeRefreshNote.hidden = false;
+    refreshBtn.disabled = true;
+    return readAllProjects(rootHandle).then(function(res){
+      PROJECTS = res.projects.slice().sort(function(a,b){
+        return (a.no || a.name).localeCompare(b.no || b.name, undefined, { sensitivity: "base" });
+      });
+      rebuildAggregates();
+      homeLoadError.hidden = !res.failed.length;
+      if (res.failed.length){
+        homeLoadError.textContent = "Couldn't fully read " + res.failed.length + " project" + (res.failed.length === 1 ? "" : "s") + " (still syncing?) — showing the rest. Try Refresh in a moment.";
+      }
+      // Re-render whichever screen is (or is about to be) visible, so
+      // Refresh works from anywhere, not just Home.
+      renderHome();
+      if (currentScreenName === "all") renderAll();
+      if (currentScreenName === "project" && currentProjectFolder){
+        var stillThere = PROJECTS.some(function(p){ return p.folderName === currentProjectFolder; });
+        if (stillThere) openProject(currentProjectFolder);
+        else showScreen("home");
+      }
+      if (!currentScreenName || currentScreenName === "setup" || currentScreenName === "reconnect"){
+        showScreen("home");
+      }
+    }).catch(function(err){
+      console.error("Reading the Projects folder failed:", err);
+      homeLoadError.hidden = false;
+      homeLoadError.textContent = isReadFailed(err)
+        ? err.message + " — nothing to show yet. Try Refresh in a moment."
+        : "Couldn't read the Projects folder. Try Refresh, or choose a different folder.";
+      if (!currentScreenName || currentScreenName === "setup" || currentScreenName === "reconnect"){
+        showScreen("home");
+      }
+    }).then(function(){
+      loading = false;
+      homeRefreshNote.hidden = true;
+      refreshBtn.disabled = false;
+    });
+  }
+  refreshBtn.addEventListener("click", function(){ loadAndRender(); });
+
+  /* ============================================================
+   * BOOT
+   * ============================================================ */
+  function boot(){
+    if (typeof window.showDirectoryPicker !== "function"){
+      setupError.hidden = false;
+      setupError.textContent = "This browser doesn't support the File System Access API this app needs. Use an up-to-date Chrome/Edge, or the installed app.";
+      showScreen("setup");
+      return;
+    }
+    idbGet("rootHandle").then(function(handle){
+      if (!handle){ showScreen("setup"); return; }
+      rootHandle = handle; rootName = handle.name;
+      return handle.queryPermission({ mode: "read" }).then(function(perm){
+        if (perm === "granted"){
+          return loadAndRender();
+        }
+        reconnectName.textContent = rootName;
+        showScreen("reconnect");
+      });
+    }).catch(function(){
+      rootHandle = null; rootName = "";
+      showScreen("setup");
+    });
+  }
+  boot();
 
   if ("serviceWorker" in navigator){
     window.addEventListener("load", function(){
