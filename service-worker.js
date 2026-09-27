@@ -89,7 +89,8 @@
 // installed copies pick up the update instead of serving stale files
 // forever.
 var ICON_VERSION = "v1";
-var CACHE_NAME = "utzline-dollar-summary-cache-v3";
+// v4 (2026-09-27): "Schedule Backups" folder hidden from the project list.
+var CACHE_NAME = "utzline-dollar-summary-cache-v4";
 
 var PRECACHE_URLS = [
   "./",
