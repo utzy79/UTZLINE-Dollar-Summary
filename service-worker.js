@@ -65,8 +65,31 @@
 // Manufacture ITP, Delivery ITP, Projects, Scheduler, Machine Schedule,
 // or Solid Surface Schedule in any way -- this app is READ-ONLY against
 // the shared Projects-root folder and writes to none of them.
+//
+// v3 (2026-09-27): three additions, all dictated the same day -- see
+// index.html's own top-of-file comment for the full write-up.
+//   1. Project detail: new this/next-month stat-tile row, and the
+//      "Monthly value" chart changed from grouped bars to a genuine
+//      stacked bar (Installed/Delivered/Outstanding forecast), where
+//      "Outstanding forecast" is a derived, display-only quantity
+//      (forecast - delivered - installed) that always sums back to the
+//      plain Forecast figure -- no double-counting, the underlying
+//      earned-value numbers are untouched.
+//   2. All Projects: the company-wide chart replaced with a wide
+//      backdrop bar per month (company-wide forecast) plus each active
+//      project's own forecast overlaid inside it as a narrower bar, all
+//      in this app's single gold accent colour (identity via position/
+//      tooltip, not a per-project palette -- a per-project palette
+//      would fail this app's own colorblind-safety validator past 3
+//      simultaneous projects in one month, and project count here is
+//      unbounded).
+//   3. Home screen: each project row now shows a "Next 3 months
+//      forecast" line (a rolling window from today).
+// Bump CACHE_NAME whenever index.html or any vendored asset changes, so
+// installed copies pick up the update instead of serving stale files
+// forever.
 var ICON_VERSION = "v1";
-var CACHE_NAME = "utzline-dollar-summary-cache-v2";
+var CACHE_NAME = "utzline-dollar-summary-cache-v3";
 
 var PRECACHE_URLS = [
   "./",

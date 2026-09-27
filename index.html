@@ -139,6 +139,76 @@
   Does NOT write to source.html, Projects, or any ITP/Scheduler app's own
   data in any way -- read-only against the shared Projects-root folder,
   as described above.
+
+  ****************************************************************
+  * v3 (2026-09-27) -- STACKED PROJECT CHART, COMPANY OVERLAY      *
+  * CHART, HOME-SCREEN FORECAST LINE. Dictated 2026-09-27, all      *
+  * three built and shipped together.                                *
+  ****************************************************************
+
+  ITEM 1 -- project detail: new "This month / Next month" stat-tile row
+  (6 compact tiles: forecast/delivered/installed x this+next month,
+  right under the existing 3 big lifetime tiles) so the two nearest
+  months are readable at a glance without reading the monthly table.
+  The big "Monthly value" chart on this screen changed from a grouped
+  bar (3 side-by-side bars per month) to a genuine STACKED bar. This
+  reads as a contradiction against the "never summed together" rule
+  above, so it's worth spelling out exactly what's stacked and why it's
+  still safe:
+
+    outstanding = forecast - delivered - installed
+
+  This is a derived, DISPLAY-ONLY quantity computed only for this one
+  chart -- aggregateProject()'s own three numbers are completely
+  untouched, and the monthly table + all six stat tiles above/below the
+  chart still show the original, un-derived Forecast/Delivered/Installed
+  figures exactly as before. The stack is Installed (bottom) + Delivered
+  (middle) + Outstanding forecast (top label, same blue as "Forecast"
+  everywhere else), and its total height always equals the plain
+  Forecast figure for that month -- proof: an installed item's value is
+  full in both forecast and installed, cancelling in the subtraction; a
+  delivered item is full in forecast and 75% in delivered, leaving
+  exactly the un-earned 25% as "outstanding"; an unstarted item is full
+  in forecast and full in outstanding. No value is invented and none is
+  double-counted -- installed + delivered + outstanding always equals
+  forecast for that month, so this is a different PICTURE of the same
+  three numbers, not a fourth number.
+
+  ITEM 2 -- All Projects: the company-wide chart is now one WIDE
+  backdrop bar per month (the company-wide forecast total, semi-
+  transparent blue) with each active project's own forecast contribution
+  drawn as a narrower bar OVERLAID inside it (per Andrew's own annotated
+  mockup: "Projects stacked bars per month overlayed over the total
+  forecast for the month" -- confirmed by reading the screenshot itself
+  that this means overlaid/nested, not segment-stacked end-to-end).
+  Deliberately does NOT color-code individual projects: the dataviz
+  skill's own validator (`validate_palette.js ... --pairs all`) confirms
+  a categorical palette only stays colorblind-safe up to 3 simultaneous
+  slots, and the number of active projects in a month is unbounded here,
+  so a per-project rainbow would silently become unsafe the moment a 4th
+  project lands in the same month. Instead every project's overlay bar
+  uses this app's own single gold accent (--accent, #caa025) -- identity
+  comes from position/height/hover-tooltip (a composite, non-hue
+  encoding), which scales to any number of projects. Hovering a month
+  lists every active project by name and value (largest first) plus the
+  company-wide total, so the "which project is which" question the
+  color-per-project instinct is trying to answer is answered by the
+  tooltip instead.
+
+  ITEM 3 -- Home screen: each project's own row now also shows a "Next 3
+  months forecast" line (this/next/month-after, always a rolling window
+  from MONTHS[0..2] -- i.e. from today -- never a fixed calendar
+  quarter), so the near-term outlook for every project is visible
+  without opening it.
+
+  Test coverage: this app shipped v1/v2 with NO automated tests at all.
+  v3 adds a new window.__testHooks surface (setProjectsForTest injects
+  fixture project data straight into the real aggregation/render
+  pipeline, same minimal-hooks convention as every sibling app) and a
+  full regression test (pdftest-dollar-summary/run_dollar_summary_v3_
+  charts.js) covering all three items -- ALL CHECKS PASSED, both as
+  DOM assertions and as visually-inspected screenshots of the project-
+  detail and All-Projects screens.
 -->
 <html lang="en">
 <head>
@@ -277,6 +347,7 @@
   .li-main{ display:flex; flex-direction:column; gap:2px; }
   .li-title{ font-weight:600; }
   .li-sub{ font-size:12px; color:var(--muted); }
+  .li-sub.li-forecast3{ color:var(--muted2); font-variant-numeric: tabular-nums; }
   .li-value{ font-weight:700; font-variant-numeric: tabular-nums; color: var(--accent); font-size:16px; white-space:nowrap; }
   .empty-note{ color: var(--muted); font-size: 14px; padding: 18px 4px; text-align: center; }
   .section-title{ font-size: 15px; margin: 0 0 8px; }
@@ -305,6 +376,15 @@
   .stat-tile.forecast .stat-value{ color: var(--series-forecast); }
   .stat-tile.delivered .stat-value{ color: var(--series-delivered); }
   .stat-tile.installed .stat-value{ color: var(--series-installed); }
+  /* 2026-09-27 -- compact variant for the project-detail page's "This
+     month / Next month" tile row (six small tiles vs. the three larger
+     lifetime tiles above them) -- same colour convention, smaller type,
+     tighter padding, so the row can hold six without dominating the page. */
+  .stat-row.stat-row-months{ margin-top: -2px; }
+  .stat-tile.sm{ flex-basis: 150px; padding: 10px 12px; }
+  .stat-tile.sm .stat-label{ margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.3px; font-size: 10.5px; }
+  .stat-value.sm{ font-size: 16px; }
+  .month-stat-heading{ font-size: 11px; color: var(--muted2); text-transform: uppercase; letter-spacing: 0.4px; margin: 2px 0 8px; }
 
   /* table */
   .table-scroll{ overflow-x:auto; -webkit-overflow-scrolling:touch; touch-action: pan-x pan-y; }
@@ -511,6 +591,7 @@
     <p class="sub" id="projSub"></p>
 
     <div class="stat-row" id="projStatRow"></div>
+    <div class="stat-row stat-row-months" id="projMonthStatRow"></div>
     <p class="mini-unscheduled-note" id="projUnscheduledNote" hidden></p>
 
     <div class="chart-card">
@@ -551,7 +632,7 @@
   </section>
 
 </main>
-<footer class="app-foot">UTZLINE $ Summary — v2, read live from your Projects folder</footer>
+<footer class="app-foot">UTZLINE $ Summary — v3, read live from your Projects folder</footer>
 
 <script src="./vendor/xlsx.full.min.js"></script>
 <script>
@@ -1086,7 +1167,13 @@
     return step * mag * 1.0;
   }
 
-  function renderLegend(container){
+  // opts.forecastLabel overrides just the "Forecast" entry's text -- used by
+  // the project-detail page's stacked chart, where the blue segment is the
+  // OUTSTANDING (not-yet-delivered-or-installed) portion rather than the
+  // full forecast total, and needs its own label to say so (see
+  // renderBarChart's own "stacked" comment for the full reasoning).
+  function renderLegend(container, opts){
+    opts = opts || {};
     container.innerHTML = "";
     SERIES_DEFS.forEach(function(s){
       var el = document.createElement("div");
@@ -1095,7 +1182,7 @@
       key.className = "legend-key fill";
       key.style.background = s.color;
       var lbl = document.createElement("span");
-      lbl.textContent = s.label;
+      lbl.textContent = (s.key === "forecast" && opts.forecastLabel) ? opts.forecastLabel : s.label;
       el.appendChild(key); el.appendChild(lbl);
       container.appendChild(el);
     });
@@ -1111,9 +1198,38 @@
   // opts.compact = true for the All Projects "monthly summary by project"
   // small multiples: smaller canvas, sparser labels, no hover layer (a
   // static preview -- "Open" gives the full interactive chart).
+  // 2026-09-27 -- Andrew, verbatim: "make the project specific card chart
+  // like the photo... bar graph is stacked, forecast, delivered, installed."
+  // Building a LITERAL stacked bar out of the three existing series as-is
+  // would double-count: `forecast` is already "full value regardless of
+  // status" -- it's not "the part that's neither delivered nor installed" --
+  // so a delivered/installed item's own dollarValue is already inside
+  // `forecast` too (see this file's own top-of-file "Never summed together"
+  // note). Stacking all three raw values on top of each other would make
+  // the bar's total height exceed the item's real value for any month with
+  // delivered/installed items, which would misrepresent real dollar figures.
+  // Resolved by deriving a genuinely mutually-exclusive "outstanding"
+  // segment for the STACKED chart specifically, computed only from the
+  // buckets this app already produces (no change to aggregateProject()/the
+  // underlying earned-value math, which the monthly table below still
+  // reads unchanged):
+  //   outstanding = forecast - delivered - installed
+  // This is exact, not approximate: every item's dollarValue lands in
+  // forecast once; an installed item's dollarValue is ALSO fully in
+  // `installed`, so subtracting it cancels out; a delivered item's
+  // dollarValue is ALSO 75% in `delivered`, so subtracting that 75% leaves
+  // exactly its remaining un-earned 25% inside `outstanding` -- nothing
+  // dropped, nothing double-counted, and outstanding+delivered+installed
+  // always sums back to the plain `forecast` total for that month, so the
+  // stacked bar's total height still means exactly what "Forecast" means
+  // everywhere else in this app. The legend/tooltip label the blue segment
+  // "Outstanding forecast" (not just "Forecast") specifically so it reads
+  // as a different, narrower quantity than the plain Forecast figure shown
+  // in the stat tiles and the monthly table above/below this chart.
   function renderBarChart(wrapEl, buckets, opts){
     opts = opts || {};
     var compact = !!opts.compact;
+    var stacked = !!opts.stacked;
     wrapEl.innerHTML = "";
     var W = compact ? 460 : 960;
     var H = compact ? 190 : 320;
@@ -1125,12 +1241,23 @@
     var tickCount = compact ? 2 : 4;
 
     var values = MONTHS.map(function(mo){ return buckets[mo.key]; });
+    var segValues = stacked ? values.map(function(v){
+      var installed = v.installed, delivered = v.delivered;
+      var outstanding = Math.max(0, v.forecast - v.delivered - v.installed);
+      return { installed: installed, delivered: delivered, outstanding: outstanding, total: installed + delivered + outstanding };
+    }) : null;
     var maxRaw = 0;
-    values.forEach(function(v){ maxRaw = Math.max(maxRaw, v.forecast, v.delivered, v.installed); });
+    if (stacked){
+      segValues.forEach(function(sv){ maxRaw = Math.max(maxRaw, sv.total); });
+    } else {
+      values.forEach(function(v){ maxRaw = Math.max(maxRaw, v.forecast, v.delivered, v.installed); });
+    }
     var yMax = niceMax(maxRaw || 1000);
 
     var svg = svgEl("svg", { viewBox:"0 0 " + W + " " + H, role:"img",
-      "aria-label":"Monthly forecast, delivered and installed value over the next 12 months" });
+      "aria-label": stacked
+        ? "Monthly value over the next 12 months, stacked by installed, delivered and outstanding forecast"
+        : "Monthly forecast, delivered and installed value over the next 12 months" });
     svg.style.width = "100%";
     svg.style.height = "auto";
     svg.style.display = "block";
@@ -1161,25 +1288,56 @@
 
     var barGap = compact ? 1 : 2;
     var groupPad = compact ? 2 : 5;
-    var barW = Math.max(1, (groupW - groupPad*2 - barGap*2) / 3);
     var groupBounds = [];
 
-    MONTHS.forEach(function(mo, i){
-      var v = values[i];
-      var gx0 = padL + i*groupW + groupPad;
-      SERIES_DEFS.forEach(function(s, si){
-        var val = v[s.key];
-        var bx = gx0 + si*(barW+barGap);
-        var by = yFor(val);
-        var bh = (padT+plotH) - by;
-        if (bh < 0) bh = 0;
-        svg.appendChild(svgEl("rect", {
-          x:bx.toFixed(1), y:by.toFixed(1), width:barW.toFixed(1), height:bh.toFixed(1),
-          rx:"3", ry:"3", fill:s.color
-        }));
+    // Stack draw order bottom-to-top: Installed (already realised) ->
+    // Delivered (75% realised) -> Outstanding forecast (not yet realised) --
+    // reads as "how much of this month is done, in progress, or still
+    // ahead," realised value anchored to the baseline.
+    var STACK_ORDER = [
+      { segKey:"installed",   color:"var(--series-installed)"  },
+      { segKey:"delivered",   color:"var(--series-delivered)"  },
+      { segKey:"outstanding", color:"var(--series-forecast)"   }
+    ];
+
+    if (stacked){
+      var stackBarW = Math.max(2, groupW - groupPad*2);
+      MONTHS.forEach(function(mo, i){
+        var sv = segValues[i];
+        var bx = padL + i*groupW + groupPad;
+        var yCursor = padT + plotH; // baseline, stack upward
+        STACK_ORDER.forEach(function(seg){
+          var segVal = sv[seg.segKey];
+          if (segVal <= 0) return;
+          var segH = (segVal / yMax) * plotH;
+          var by = yCursor - segH;
+          svg.appendChild(svgEl("rect", {
+            x:bx.toFixed(1), y:by.toFixed(1), width:stackBarW.toFixed(1), height:segH.toFixed(1),
+            rx:"3", ry:"3", fill:seg.color
+          }));
+          yCursor = by;
+        });
+        groupBounds.push({ x0: padL + i*groupW, x1: padL + (i+1)*groupW });
       });
-      groupBounds.push({ x0: padL + i*groupW, x1: padL + (i+1)*groupW });
-    });
+    } else {
+      var barW = Math.max(1, (groupW - groupPad*2 - barGap*2) / 3);
+      MONTHS.forEach(function(mo, i){
+        var v = values[i];
+        var gx0 = padL + i*groupW + groupPad;
+        SERIES_DEFS.forEach(function(s, si){
+          var val = v[s.key];
+          var bx = gx0 + si*(barW+barGap);
+          var by = yFor(val);
+          var bh = (padT+plotH) - by;
+          if (bh < 0) bh = 0;
+          svg.appendChild(svgEl("rect", {
+            x:bx.toFixed(1), y:by.toFixed(1), width:barW.toFixed(1), height:bh.toFixed(1),
+            rx:"3", ry:"3", fill:s.color
+          }));
+        });
+        groupBounds.push({ x0: padL + i*groupW, x1: padL + (i+1)*groupW });
+      });
+    }
 
     wrapEl.appendChild(svg);
     if (compact) return; // static preview -- no hover layer
@@ -1196,17 +1354,199 @@
     function showTooltipAt(i){
       var mo = MONTHS[i];
       var v = values[i];
-      var rows = SERIES_DEFS.map(function(s){
-        return '<div class="tt-row"><span class="k fillkey" style="background:'+s.color+'"></span><span>'+s.label+'</span><span class="v">'+money(v[s.key])+'</span></div>';
-      }).join("");
+      var rows, topVal;
+      if (stacked){
+        var sv = segValues[i];
+        rows = '<div class="tt-row"><span class="k fillkey" style="background:var(--series-installed)"></span><span>Installed (100%)</span><span class="v">'+money(sv.installed)+'</span></div>' +
+               '<div class="tt-row"><span class="k fillkey" style="background:var(--series-delivered)"></span><span>Delivered (75%)</span><span class="v">'+money(sv.delivered)+'</span></div>' +
+               '<div class="tt-row"><span class="k fillkey" style="background:var(--series-forecast)"></span><span>Outstanding forecast</span><span class="v">'+money(sv.outstanding)+'</span></div>' +
+               '<div class="tt-row" style="border-top:1px solid var(--chart-grid);margin-top:6px;padding-top:6px;"><span>Total scheduled</span><span class="v">'+money(v.forecast)+'</span></div>';
+        topVal = sv.total;
+      } else {
+        rows = SERIES_DEFS.map(function(s){
+          return '<div class="tt-row"><span class="k fillkey" style="background:'+s.color+'"></span><span>'+s.label+'</span><span class="v">'+money(v[s.key])+'</span></div>';
+        }).join("");
+        topVal = Math.max(v.forecast, v.delivered, v.installed);
+      }
       tooltip.innerHTML = '<div class="tt-month"></div>' + rows;
       tooltip.querySelector(".tt-month").textContent = mo.label;
       var wrapRect = wrapEl.getBoundingClientRect();
       var svgRect = svg.getBoundingClientRect();
       var cxRatio = (padL + (i+0.5)*groupW) / W;
       var px = svgRect.left - wrapRect.left + cxRatio * svgRect.width;
-      var topVal = Math.max(v.forecast, v.delivered, v.installed);
       var py = svgRect.top - wrapRect.top + (yFor(topVal)/H) * svgRect.height;
+      tooltip.style.left = px + "px";
+      tooltip.style.top = Math.max(py, 10) + "px";
+      tooltip.style.display = "block";
+    }
+    function hideTooltip(){ tooltip.style.display = "none"; }
+    function indexFromClientX(clientX){
+      var svgRect = svg.getBoundingClientRect();
+      var relX = ((clientX - svgRect.left) / svgRect.width) * W;
+      for (var i = 0; i < groupBounds.length; i++){
+        if (relX >= groupBounds[i].x0 && relX < groupBounds[i].x1) return i;
+      }
+      return relX < padL ? 0 : MONTHS.length - 1;
+    }
+    hit.addEventListener("pointermove", function(ev){ showTooltipAt(indexFromClientX(ev.clientX)); });
+    hit.addEventListener("pointerleave", hideTooltip);
+    hit.addEventListener("pointerdown", function(ev){ showTooltipAt(indexFromClientX(ev.clientX)); });
+  }
+
+  // 2026-09-27 -- Andrew, verbatim: "company wide project page bar graph
+  // like photo, wide bar for the monthly forecast, with the individual
+  // projects overlaid over the top" (screenshot annotated: "Projects
+  // stacked bars per month overlayed over the total forecast for the
+  // month"). Read together with the image itself (two narrower bars of
+  // different widths sitting INSIDE one wider bar, not stacked end-to-end)
+  // as overlaid/nested bars, not a traditional stacked-segments bar --
+  // "stacked" here describes the visual (bars sitting on top of/in front of
+  // each other), not literal value-summing. This entirely replaces the
+  // company-wide chart's old 3-series (Forecast/Delivered/Installed)
+  // grouped-bar view with a per-PROJECT decomposition of the one Forecast
+  // total instead -- Delivered/Installed company-wide totals are still
+  // shown above, in the stat tiles, unaffected.
+  //
+  // Colour choice: a per-project CATEGORICAL palette doesn't scale here --
+  // the number of active projects in a month is unbounded and the dataviz
+  // skill's own categorical palette only clears its safety checks up to
+  // 3 slots at once (this app's OWN 3 series already use all 3). Rather
+  // than reuse those 3 series colours for a completely different meaning
+  // (which project a bar belongs to) or silently exceed the CVD-safe slot
+  // count, every project's overlay bar uses the SAME single colour (this
+  // app's own money/gold --accent, distinct from all 3 series colours) --
+  // composite encoding per the skill's own guidance for uncapped category
+  // counts (position + height carry which/how-much, colour just marks
+  // "this is a project's own slice"; identity comes from the hover
+  // tooltip, which lists every active project by name -- the required
+  // secondary encoding for a palette outside the validated slot count).
+  function renderCompanyOverlayChart(wrapEl, legendEl){
+    wrapEl.innerHTML = "";
+    if (legendEl){
+      legendEl.innerHTML =
+        '<div class="legend-item"><span class="legend-key fill" style="background:var(--series-forecast)"></span><span>Company-wide forecast</span></div>' +
+        '<div class="legend-item"><span class="legend-key fill" style="background:var(--accent)"></span><span>Individual project (hover for name)</span></div>';
+    }
+    var W = 960, H = 320, padL = 56, padR = 16, padT = 16, padB = 34;
+    var plotW = W - padL - padR, plotH = H - padT - padB;
+    var tickCount = 4;
+
+    var companyVals = MONTHS.map(function(mo){ return COMPANY_BUCKETS[mo.key].forecast; });
+    var yMax = niceMax(Math.max.apply(null, companyVals.concat([1000])));
+
+    // Per month: every project with a nonzero forecast slice that month,
+    // sorted largest-first (both for draw order -- larger bars drawn first
+    // so a thin sliver never gets fully hidden behind a wider one at the
+    // same x -- and for the tooltip's own "largest contributors first").
+    var monthProjectRows = MONTHS.map(function(mo){
+      var rows = [];
+      PROJECTS.forEach(function(p){
+        var agg = PROJECT_AGG[p.folderName];
+        var val = agg ? agg.buckets[mo.key].forecast : 0;
+        if (val > 0) rows.push({ name: (p.no ? p.no + " — " : "") + p.name, value: val });
+      });
+      rows.sort(function(a, b){ return b.value - a.value; });
+      return rows;
+    });
+
+    var svg = svgEl("svg", { viewBox:"0 0 " + W + " " + H, role:"img",
+      "aria-label":"Company-wide monthly forecast with individual projects overlaid" });
+    svg.style.width = "100%"; svg.style.height = "auto"; svg.style.display = "block";
+
+    function yFor(v){ return padT + plotH - (v / yMax) * plotH; }
+    var groupW = plotW / MONTHS.length;
+
+    for (var t = 0; t <= tickCount; t++){
+      var val = (yMax / tickCount) * t;
+      var y = yFor(val);
+      svg.appendChild(svgEl("line", { x1:padL, x2:W-padR, y1:y, y2:y, stroke:"var(--chart-grid)", "stroke-width":"1" }));
+      var lbl = svgEl("text", { x:padL-6, y:y+4, "text-anchor":"end", "font-size":"11", fill:"var(--chart-muted)" });
+      lbl.textContent = moneyCompact(val);
+      svg.appendChild(lbl);
+    }
+    svg.appendChild(svgEl("line", { x1:padL, x2:W-padR, y1:padT+plotH, y2:padT+plotH, stroke:"var(--chart-baseline)", "stroke-width":"1" }));
+
+    var labelEvery = MONTHS.length > 8 ? 2 : 1;
+    MONTHS.forEach(function(mo, i){
+      if (i % labelEvery !== 0 && i !== MONTHS.length-1) return;
+      var cx = padL + (i+0.5)*groupW;
+      var lbl = svgEl("text", { x:cx, y:H-10, "text-anchor":"middle", "font-size":"11", fill:"var(--chart-muted)" });
+      lbl.textContent = mo.shortLabel;
+      svg.appendChild(lbl);
+    });
+
+    var groupPad = 5;
+    var backdropW = groupW - groupPad*2;
+    var overlayInset = Math.min(6, backdropW * 0.12);
+    var overlayGap = 2;
+    var groupBounds = [];
+
+    MONTHS.forEach(function(mo, i){
+      var gx0 = padL + i*groupW + groupPad;
+      var total = companyVals[i];
+      var by0 = yFor(total);
+      var bh0 = (padT+plotH) - by0;
+      if (bh0 > 0){
+        svg.appendChild(svgEl("rect", {
+          x:gx0.toFixed(1), y:by0.toFixed(1), width:backdropW.toFixed(1), height:bh0.toFixed(1),
+          rx:"3", ry:"3", fill:"var(--series-forecast)", opacity:"0.55"
+        }));
+      }
+      var rows = monthProjectRows[i];
+      if (rows.length){
+        var availW = backdropW - overlayInset*2;
+        var eachW = Math.max(2, Math.min(26, (availW - (rows.length-1)*overlayGap) / rows.length));
+        var usedW = rows.length*eachW + (rows.length-1)*overlayGap;
+        var ox0 = gx0 + overlayInset + Math.max(0, (availW - usedW) / 2);
+        rows.forEach(function(row, k){
+          var bx = ox0 + k*(eachW+overlayGap);
+          var by = yFor(row.value);
+          var bh = (padT+plotH) - by;
+          if (bh < 0) bh = 0;
+          svg.appendChild(svgEl("rect", {
+            x:bx.toFixed(1), y:by.toFixed(1), width:eachW.toFixed(1), height:bh.toFixed(1),
+            rx:"2", ry:"2", fill:"var(--accent)", stroke:"var(--chart-surface)", "stroke-width":"1"
+          }));
+        });
+      }
+      groupBounds.push({ x0: padL + i*groupW, x1: padL + (i+1)*groupW });
+    });
+
+    wrapEl.appendChild(svg);
+
+    var hit = svgEl("rect", { x:padL, y:padT, width:plotW, height:plotH, fill:"transparent" });
+    svg.appendChild(hit);
+
+    var tooltip = document.createElement("div");
+    tooltip.className = "chart-tooltip";
+    tooltip.style.display = "none";
+    wrapEl.style.position = "relative";
+    wrapEl.appendChild(tooltip);
+
+    var MAX_TOOLTIP_ROWS = 8;
+    function showTooltipAt(i){
+      var mo = MONTHS[i];
+      var rows = monthProjectRows[i];
+      var shown = rows.slice(0, MAX_TOOLTIP_ROWS);
+      var rest = rows.slice(MAX_TOOLTIP_ROWS);
+      var restTotal = rest.reduce(function(s, r){ return s + r.value; }, 0);
+      var html = shown.map(function(r){
+        return '<div class="tt-row"><span class="k fillkey" style="background:var(--accent)"></span><span>'+escapeHtml(r.name)+'</span><span class="v">'+money(r.value)+'</span></div>';
+      }).join("");
+      if (rest.length){
+        html += '<div class="tt-row"><span class="k fillkey" style="background:var(--accent)"></span><span>+'+rest.length+' more project'+(rest.length===1?"":"s")+'</span><span class="v">'+money(restTotal)+'</span></div>';
+      }
+      if (!rows.length){
+        html = '<div class="tt-row"><span>No scheduled projects this month</span></div>';
+      }
+      html += '<div class="tt-row" style="border-top:1px solid var(--chart-grid);margin-top:6px;padding-top:6px;"><span class="k fillkey" style="background:var(--series-forecast)"></span><span>Company-wide forecast</span><span class="v">'+money(companyVals[i])+'</span></div>';
+      tooltip.innerHTML = '<div class="tt-month"></div>' + html;
+      tooltip.querySelector(".tt-month").textContent = mo.label;
+      var wrapRect = wrapEl.getBoundingClientRect();
+      var svgRect = svg.getBoundingClientRect();
+      var cxRatio = (padL + (i+0.5)*groupW) / W;
+      var px = svgRect.left - wrapRect.left + cxRatio * svgRect.width;
+      var py = svgRect.top - wrapRect.top + (yFor(companyVals[i])/H) * svgRect.height;
       tooltip.style.left = px + "px";
       tooltip.style.top = Math.max(py, 10) + "px";
       tooltip.style.display = "block";
@@ -1294,6 +1634,17 @@
   /* ============================================================
    * HOME SCREEN
    * ============================================================ */
+  // 2026-09-27 -- Andrew, verbatim: "in this summaty page, have the next 3
+  // months forecast on each projects button." A ROLLING window from today
+  // (this month + the next two -- MONTHS[0..2], same rolling 12-month
+  // window every other screen already uses, not a fixed quarter), added as
+  // a new small line under the existing Builder/PM sub-line, alongside the
+  // existing lifetime contract-value figure (kept, unchanged).
+  function projectNext3MonthsLine(agg){
+    return MONTHS.slice(0, 3).map(function(mo){
+      return mo.shortLabel + " " + moneyCompact(agg.buckets[mo.key].forecast);
+    }).join(" &nbsp;·&nbsp; ");
+  }
   function renderHome(){
     var list = document.getElementById("projectList");
     var empty = document.getElementById("projectListEmpty");
@@ -1307,6 +1658,7 @@
         '<div class="li-main">' +
           '<span class="li-title">' + escapeHtml((p.no ? p.no + " — " : "") + p.name) + '</span>' +
           '<span class="li-sub">Builder: ' + escapeHtml(p.contractor || "—") + ' &nbsp;·&nbsp; PM: ' + escapeHtml(p.projectManager || "—") + '</span>' +
+          '<span class="li-sub li-forecast3">Next 3 months forecast: ' + projectNext3MonthsLine(agg) + '</span>' +
         '</div>' +
         '<span class="li-value">' + money(agg.totals.contract) + '</span>' +
         '<span class="chev">›</span>';
@@ -1324,6 +1676,26 @@
 
   function tile(label, value, cls){
     return '<div class="stat-tile ' + cls + '"><div class="stat-label">' + label + '</div><div class="stat-value">' + value + '</div></div>';
+  }
+  // 2026-09-27 -- the project-detail page's new "This month / Next month"
+  // tile row (see openProject()'s own comment). Each of MONTHS[0]/MONTHS[1]
+  // gets its own compact forecast/delivered/installed trio, using the exact
+  // same buckets the chart/table below already read -- purely a new display
+  // of data this app already computes, nothing new aggregated.
+  function monthStatTile(monthLabel, seriesLabel, value, cls){
+    return '<div class="stat-tile sm ' + cls + '"><div class="stat-label">' + escapeHtml(monthLabel) + ' ' + seriesLabel + '</div><div class="stat-value sm">' + money(value) + '</div></div>';
+  }
+  function renderMonthStatRow(container, buckets){
+    if (!container) return;
+    var thisMo = MONTHS[0], nextMo = MONTHS[1];
+    var thisB = buckets[thisMo.key], nextB = buckets[nextMo.key];
+    container.innerHTML =
+      monthStatTile(thisMo.label, "forecast", thisB.forecast, "forecast") +
+      monthStatTile(thisMo.label, "delivered", thisB.delivered, "delivered") +
+      monthStatTile(thisMo.label, "installed", thisB.installed, "installed") +
+      monthStatTile(nextMo.label, "forecast", nextB.forecast, "forecast") +
+      monthStatTile(nextMo.label, "delivered", nextB.delivered, "delivered") +
+      monthStatTile(nextMo.label, "installed", nextB.installed, "installed");
   }
 
   function renderProjectMiniGrid(){
@@ -1376,8 +1748,7 @@
       tile("Delivered to date (75% earned)", money(companyTotals.deliveredToDate), "delivered") +
       tile("Installed to date (100% earned)", money(companyTotals.installedToDate), "installed");
 
-    renderLegend(document.getElementById("allChartLegend"));
-    renderBarChart(document.getElementById("allChartWrap"), COMPANY_BUCKETS);
+    renderCompanyOverlayChart(document.getElementById("allChartWrap"), document.getElementById("allChartLegend"));
 
     renderProjectMiniGrid();
 
@@ -1458,6 +1829,16 @@
       tile("Delivered to date (75% earned)", money(agg.totals.deliveredToDate), "delivered") +
       tile("Installed to date (100% earned)", money(agg.totals.installedToDate), "installed");
 
+    // 2026-09-27 -- Andrew, verbatim: "make the project specific card chart
+    // like the photo, the extra button cards at the top... forecast,
+    // delivered, installed." Screenshot showed the lifetime tiles above
+    // followed by a second row of MONTH-specific tiles ("This month
+    // forecast/delivered/installed", "Next month forecast..."). MONTHS[0]/
+    // MONTHS[1] are always "this month"/"next month" since MONTHS is a
+    // rolling window rebuilt from today() on every load (see buildMonthWindow
+    // above) -- no separate date math needed here.
+    renderMonthStatRow(document.getElementById("projMonthStatRow"), agg.buckets);
+
     var unschedNote = document.getElementById("projUnscheduledNote");
     if (agg.totals.unscheduled > 0){
       unschedNote.hidden = false;
@@ -1466,8 +1847,8 @@
       unschedNote.hidden = true;
     }
 
-    renderLegend(document.getElementById("projChartLegend"));
-    renderBarChart(document.getElementById("projChartWrap"), agg.buckets);
+    renderLegend(document.getElementById("projChartLegend"), { forecastLabel: "Outstanding forecast" });
+    renderBarChart(document.getElementById("projChartWrap"), agg.buckets, { stacked: true });
 
     function refreshMonthlyBits(){
       renderMonthPicker(document.getElementById("projMonthPicker"), projSelectedMonths[folderName], refreshMonthlyBits);
@@ -1589,6 +1970,54 @@
     });
   }
   boot();
+
+  // 2026-09-27 -- minimal test-only surface (this app shipped v1/v2 with no
+  // automated test coverage at all). Rather than mocking the whole File
+  // System Access API just to reach these three new display features,
+  // setProjectsForTest() injects fixture project data directly into the
+  // exact same PROJECTS/rebuildAggregates()/render* pipeline real folder
+  // reads use -- same minimal-surface convention as every sibling app's own
+  // window.__testHooks (e.g. Site Measure's setFakeCompanyLogoForTest).
+  window.__testHooks = {
+    ready: function(){ return true; },
+    getMonthKeysForTest: function(){ return MONTHS.map(function(m){ return m.key; }); },
+    setProjectsForTest: function(projects){
+      PROJECTS = projects.slice();
+      rebuildAggregates();
+      renderHome();
+      if (currentScreenName === "all") renderAll();
+      if (currentScreenName === "project" && currentProjectFolder) openProject(currentProjectFolder);
+    },
+    showScreenForTest: function(name){ showScreen(name); },
+    renderAllForTest: function(){ renderAll(); },
+    openProjectForTest: function(folderName){ openProject(folderName); },
+    homeListHTML: function(){ var el = document.getElementById("projectList"); return el ? el.innerHTML : null; },
+    projStatRowHTML: function(){ var el = document.getElementById("projStatRow"); return el ? el.innerHTML : null; },
+    projMonthStatRowHTML: function(){ var el = document.getElementById("projMonthStatRow"); return el ? el.innerHTML : null; },
+    projChartSVG: function(){ var el = document.getElementById("projChartWrap"); var svg = el && el.querySelector("svg"); return svg ? svg.outerHTML : null; },
+    // Excludes the transparent full-plot hit-test rect every full-size
+    // chart appends for hover detection -- callers want the actual BAR
+    // count, not an implementation detail of the hover layer.
+    projChartRectCount: function(){ var el = document.getElementById("projChartWrap"); return el ? el.querySelectorAll('svg rect:not([fill="transparent"])').length : 0; },
+    allChartRectCount: function(){ var el = document.getElementById("allChartWrap"); return el ? el.querySelectorAll('svg rect:not([fill="transparent"])').length : 0; },
+    allChartLegendText: function(){ var el = document.getElementById("allChartLegend"); return el ? el.textContent : null; },
+    // Hovers the All-projects overlay chart at a given month index (0-based)
+    // by dispatching a synthetic pointermove at that group's own centre, so
+    // the tooltip's real hit-testing/rendering code path is exercised.
+    hoverAllChartMonthForTest: function(monthIndex){
+      var el = document.getElementById("allChartWrap");
+      var svg = el && el.querySelector("svg");
+      if (!svg) return null;
+      var hit = svg.querySelector("rect[fill=\"transparent\"]");
+      if (!hit) return null;
+      var rect = hit.getBoundingClientRect();
+      var totalMonths = MONTHS.length;
+      var clientX = rect.left + rect.width * ((monthIndex + 0.5) / totalMonths);
+      hit.dispatchEvent(new PointerEvent("pointermove", { clientX: clientX, bubbles: true }));
+      var tooltip = el.querySelector(".chart-tooltip");
+      return tooltip ? tooltip.innerHTML : null;
+    }
+  };
 
   if ("serviceWorker" in navigator){
     window.addEventListener("load", function(){
