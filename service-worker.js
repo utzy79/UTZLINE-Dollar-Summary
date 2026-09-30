@@ -91,7 +91,8 @@
 var ICON_VERSION = "v1";
 // v4 (2026-09-27): "Schedule Backups" folder hidden from the project list.
 // v5 (2026-09-29): RC 1.0 -- the release tag on the logo; now also a Windows desktop app (UTZLINE Dollar Summary Setup RC 1.0.exe).
-var CACHE_NAME = "utzline-dollar-summary-cache-v5";
+// v6 (2026-09-30): RC 1.0 -- event layout v2: status / schedule / cut / completion / cutting file / note records are one folder per LEVEL (Project Saves/UTZLINE Events/<branch>/<Level>/); old per-item folders are still read.
+var CACHE_NAME = "utzline-dollar-summary-cache-v6";
 
 var PRECACHE_URLS = [
   "./",

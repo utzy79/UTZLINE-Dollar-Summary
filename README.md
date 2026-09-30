@@ -1,6 +1,14 @@
 # UTZLINE $ Summary — installable app
 
-**Current version: v5 (RC 1.0)** (its own independent version line, separate from every other app in the family — bump this line, and add a dated entry below, every time a new build ships.)
+**Current version: v6 (RC 1.0)** (its own independent version line, separate from every other app in the family — bump this line, and add a dated entry below, every time a new build ships.)
+
+**v6 (2026-09-30) — RC 1.0: records are kept one folder per level — much faster on a tablet.**
+
+- Andrew: *"how can we speed up schedule loading on the app android"* / *"all are slow"*. Every status, schedule date, cut, solid-surface tick, cutting file and note is still one small file per change (nothing is ever rewritten), but they now go in **one folder per level** — `Project Saves/UTZLINE Events/<record type>/<Level>/`, each file named `<Level> - <Room> - <Code> -- <name> - <time> - <kind>.json` — instead of one folder per joinery item. A schedule now lists a handful of level folders instead of hundreds of item folders; on the tablet each folder costs about a quarter of a second.
+- Records a project already has in the old item folders are still read, and both places are shown together (a record found in both counts once). UTZLINE Projects shows **Speed up this project** on a project that still has old folders and moves them — each record copied, checked, then its old copy removed.
+- **Update every tablet and PC.** An app older than this one doesn't look in the level folders, so it won't see records written by this one — and only press *Speed up this project* once every device is updated.
+- Reads both the level folders and the old item folders.
+
 
 **v5 (2026-09-29) — RC 1.0, and a Windows desktop app.** Andrew: *"send me the utzline $ exe"*. The app now has its own installer, **UTZLINE Dollar Summary Setup RC 1.0.exe** (the same Electron shell and per-user NSIS installer as the rest of the family, built by `electron-apps/build_apps.py`; "Dollar" in the file and Start menu names, because a `$` isn't safe in an installer name — the app itself still says UTZLINE $ Summary). The logo carries the small RC 1.0 tag like every other app. Nothing else changed.
 
