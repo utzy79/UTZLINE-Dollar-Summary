@@ -90,7 +90,8 @@
 // forever.
 var ICON_VERSION = "v1";
 // v4 (2026-09-27): "Schedule Backups" folder hidden from the project list.
-var CACHE_NAME = "utzline-dollar-summary-cache-v4";
+// v5 (2026-09-29): RC 1.0 -- the release tag on the logo; now also a Windows desktop app (UTZLINE Dollar Summary Setup RC 1.0.exe).
+var CACHE_NAME = "utzline-dollar-summary-cache-v5";
 
 var PRECACHE_URLS = [
   "./",

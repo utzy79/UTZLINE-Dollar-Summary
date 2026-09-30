@@ -468,12 +468,15 @@
 
   footer.app-foot{ text-align:center; color: var(--muted2); font-size:11px; padding: 10px 0 4px; }
 </style>
+<style>/* (RC 1.0) the small release tag on the logo -- same as every other app in the family */
+.rc-tag{ display:inline-block; margin-left:7px; padding:0 4px; border:1px solid currentColor; border-radius:4px; font-size:9px; line-height:13px; font-weight:600; letter-spacing:.05em; opacity:.55; vertical-align:middle; position:relative; top:-1px; white-space:nowrap; text-transform:none; font-style:normal; }
+</style>
 </head>
 <body>
 
 <header>
   <img src="./icons/icon-192.png" alt="">
-  <div class="brand">UTZLINE $ Summary<small>Month-by-month dollar values, forecasts, delivered &amp; installed</small></div>
+  <div class="brand">UTZLINE $ Summary<span class="rc-tag" title="Release candidate 1.0">RC 1.0</span><small>Month-by-month dollar values, forecasts, delivered &amp; installed</small></div>
   <button class="btn secondary sm" id="refreshBtn" title="Re-read the Projects folder">&#8635; Refresh</button>
 </header>
 
@@ -632,7 +635,7 @@
   </section>
 
 </main>
-<footer class="app-foot">UTZLINE $ Summary — v3, read live from your Projects folder</footer>
+<footer class="app-foot">UTZLINE $ Summary — RC 1.0 (v5), read live from your Projects folder</footer>
 
 <script src="./vendor/xlsx.full.min.js"></script>
 <script>

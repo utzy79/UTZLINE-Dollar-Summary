@@ -1,6 +1,8 @@
 # UTZLINE $ Summary — installable app
 
-**Current version: v4** (its own independent version line, separate from every other app in the family — bump this line, and add a dated entry below, every time a new build ships.)
+**Current version: v5 (RC 1.0)** (its own independent version line, separate from every other app in the family — bump this line, and add a dated entry below, every time a new build ships.)
+
+**v5 (2026-09-29) — RC 1.0, and a Windows desktop app.** Andrew: *"send me the utzline $ exe"*. The app now has its own installer, **UTZLINE Dollar Summary Setup RC 1.0.exe** (the same Electron shell and per-user NSIS installer as the rest of the family, built by `electron-apps/build_apps.py`; "Dollar" in the file and Start menu names, because a `$` isn't safe in an installer name — the app itself still says UTZLINE $ Summary). The logo carries the small RC 1.0 tag like every other app. Nothing else changed.
 
 **v4 (2026-09-27):** Hides the **Schedule Backups** folder from the project list. Scheduler v29 now keeps its daily spreadsheet backups in that folder, directly in the main Projects folder (Andrew: *"a schedule backups folder directly in the main folder ... I meant in the main folder. Not the individual projects folder."*). Every app lists every folder in the main folder as a project, so each one now leaves that folder out: `isReservedRootFolderName`, the same one-line rule in every app. Tested across all 11 apps by `pdftest-projects/run_schedule_backups_folder_hidden.js`, which fails on every app's previous build and passes on the new ones.
 
