@@ -95,7 +95,7 @@ var ICON_VERSION = "v1";
 // v7 (2026-09-30): RC 1.0 -- change-folder button.
 // v8 (2026-09-30): RC 1.0 -- shop drawings = 10% in the month they were sent, day / night mode.
 // v9 (2026-10-01): RC 1.0 -- Windows' 260-character path limit: shorter record names in the event store (see README)
-var CACHE_NAME = "utzline-dollar-summary-cache-v9";
+var CACHE_NAME = "utzline-dollar-summary-cache-v12";
 
 var PRECACHE_URLS = [
   "./",
