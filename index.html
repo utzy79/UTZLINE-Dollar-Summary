@@ -213,9 +213,103 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<!-- UTZLINE-THEME BEGIN (generated from shared/theme -- don't edit here) -->
+<script>
+/* ============================== UTZLINE day / night (2026-09-30) ==============================
+   Andrew: "give me day / night mode for all apps".
+   One small module, inlined at the top of the page head in every app (before the page paints):
+     - the choice is kept per device in localStorage "utzline-theme" ("light" | "dark"); with nothing
+       kept, the device's own setting (prefers-color-scheme) decides; the apps on one origin share it.
+       (Site Measure / Viewer's older key "redline_theme" is read as a fallback.)
+     - sets <html data-theme="light|dark"> and color-scheme, keeps <meta name="theme-color"> in step
+       (data-theme-light / data-theme-dark on the meta hold the two colours).
+     - UtzTheme.mount(headerEl) adds the ☀ / ☾ toggle button (class utz-theme-btn) to the app's header.
+     - UtzTheme.get() / set("light"|"dark"|null) / toggle() / onChange(fn).
+   Each app's own stylesheet carries the light palette under :root[data-theme="light"] (the same
+   variable names it already uses for dark). Plain ES5. */
+(function(){
+  "use strict";
+  if (window.UtzTheme) return;
+  var KEY = "utzline-theme", OLD = "redline_theme";
+  var listeners = [];
+  function stored(){
+    try {
+      var v = localStorage.getItem(KEY);
+      if (v === "light" || v === "dark") return v;
+      var o = localStorage.getItem(OLD);
+      if (o === "light" || o === "dark") return o;
+    } catch (e) {}
+    return null;
+  }
+  function system(){
+    try { return window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"; } catch (e) { return "dark"; }
+  }
+  function current(){ return stored() || system(); }
+  function apply(){
+    var t = current();
+    var root = document.documentElement;
+    root.setAttribute("data-theme", t);
+    root.style.colorScheme = t;
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta){
+      var want = meta.getAttribute(t === "light" ? "data-theme-light" : "data-theme-dark");
+      if (!meta.getAttribute("data-theme-dark")) meta.setAttribute("data-theme-dark", meta.getAttribute("content") || "");
+      if (want) meta.setAttribute("content", want);
+      else if (t === "light") meta.setAttribute("content", "#f4f4f4");
+      else meta.setAttribute("content", meta.getAttribute("data-theme-dark") || "");
+    }
+    for (var i = 0; i < listeners.length; i++){ try { listeners[i](t); } catch (e) {} }
+    var btns = document.querySelectorAll(".utz-theme-btn");
+    for (var j = 0; j < btns.length; j++) paint(btns[j], t);
+    return t;
+  }
+  var SUN = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+  var MOON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+  function paint(btn, t){
+    btn.innerHTML = t === "light" ? MOON : SUN;
+    btn.title = t === "light" ? "Night mode" : "Day mode";
+    btn.setAttribute("aria-label", btn.title);
+  }
+  function set(v){
+    try { if (v === "light" || v === "dark") localStorage.setItem(KEY, v); else localStorage.removeItem(KEY); } catch (e) {}
+    return apply();
+  }
+  function toggle(){ return set(current() === "light" ? "dark" : "light"); }
+  function mount(header){
+    header = header || document.querySelector("header");
+    if (!header || header.querySelector(".utz-theme-btn")) return null;
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "utz-theme-btn";
+    paint(b, current());
+    b.addEventListener("click", function(e){ e.preventDefault(); e.stopPropagation(); toggle(); });
+    header.appendChild(b);
+    return b;
+  }
+  try {
+    var mq = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)");
+    if (mq && mq.addEventListener) mq.addEventListener("change", function(){ if (!stored()) apply(); });
+  } catch (e) {}
+  window.addEventListener("storage", function(e){ if (e && (e.key === KEY || e.key === OLD || e.key === null)) apply(); });
+  apply();
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function(){ apply(); mount(); });
+  else { apply(); mount(); }
+  window.UtzTheme = { get: current, stored: stored, set: set, toggle: toggle, mount: mount, apply: apply, onChange: function(fn){ if (typeof fn === "function") listeners.push(fn); } };
+})();
+</script>
+<style id="utzThemeStyle">
+  /* ---- UTZLINE day / night toggle (2026-09-30) -- see shared/theme/theme.js ---- */
+  header{ position: relative; }
+  .utz-theme-btn{ position: absolute; top: 50%; right: 12px; transform: translateY(-50%); display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; border-radius: 999px; border: 1px solid var(--border, rgba(128,128,128,.4)); background: transparent; color: inherit; cursor: pointer; opacity: .85; touch-action: manipulation; z-index: 3; }
+  .utz-theme-btn:hover, .utz-theme-btn:focus{ opacity: 1; outline: none; }
+  header:has(.utz-theme-btn){ padding-right: 60px; }
+  /* light palette (day mode) */
+  :root[data-theme="light"]{ --bg: #f8f5ee; --panel: #ffffff; --panel2: #f1ecdf; --border: #ddd3bd; --text: #201a0f; --muted: #6f6249; --muted2: #948663; --accent: #a67f12; --accent-ink: #ffffff; --accent-soft: #f5ecd0; --danger: #d43b3b; --warn: #b7791f; --ok: #1f9a4f; --utz-header: #ffffff; --utz-deep: #eee8d9; }
+  :root[data-theme="light"] select, :root[data-theme="light"] input, :root[data-theme="light"] textarea{ color-scheme: light; }
+</style>
+<!-- UTZLINE-THEME END -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>UTZLINE $ Summary</title>
-<meta name="theme-color" content="#161209">
+<meta name="theme-color" content="#161209" data-theme-light="#f8f5ee">
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
@@ -263,7 +357,7 @@
     gap: 10px;
     padding: 12px 16px;
     border-bottom: 1px solid var(--border);
-    background: #120f07;
+    background: var(--utz-deep, var(--utz-deep, var(--utz-deep, #120f07)));
     flex: 0 0 auto;
   }
   header img{ width: 32px; height: 32px; border-radius: 8px; }
@@ -376,6 +470,7 @@
   .stat-tile.forecast .stat-value{ color: var(--series-forecast); }
   .stat-tile.delivered .stat-value{ color: var(--series-delivered); }
   .stat-tile.installed .stat-value{ color: var(--series-installed); }
+  .stat-tile.shopsent .stat-value{ color: var(--series-shopsent); }
   /* 2026-09-27 -- compact variant for the project-detail page's "This
      month / Next month" tile row (six small tiles vs. the three larger
      lifetime tiles above them) -- same colour convention, smaller type,
@@ -427,7 +522,7 @@
   .chart-tooltip{
     position:absolute;
     pointer-events:none;
-    background: #0d0d0c;
+    background: var(--utz-deep, var(--utz-deep, var(--utz-deep, #0d0d0c)));
     border: 1px solid var(--chart-grid);
     border-radius: 8px;
     padding: 8px 10px;
@@ -497,10 +592,11 @@
    for 12 hours (they only change when a device that hasn't been updated
    writes there); UtzEvents.refresh({ old: true }) forgets that.
 
-   UtzEvents.tidy() (UTZLINE Projects -> "Speed up this project") moves the
-   old per-item records into the new layout: copy, read back, then remove
-   the old file; an old item folder is removed once empty. Safe to repeat,
-   safe on two PCs at once. Run it only when every device has the v2 apps.
+   UtzEvents.tidy() moves the old per-item records into the new layout: copy,
+   read back, then remove the old file; an old item folder is removed once
+   empty. No screen calls it any more (the "Speed up this project" card was
+   removed from UTZLINE Projects in v48, 2026-09-30, once Andrew's jobs were
+   moved): the apps simply keep reading both layouts.
 
    Generated into each app between UTZLINE-EVENT-STORE markers from
    shared/event-store/event-store.js -- edit it there. */
@@ -1046,6 +1142,16 @@
 })();
 </script>
 <!-- UTZLINE-EVENT-STORE END -->
+<!-- UTZLINE-CHANGE-FOLDER BEGIN -->
+<style id="utzChangeFolderStyle">
+/* (2026-09-30) "move the change folder to the bottom right of the page, and smaller" */
+.utz-change-folder{position:fixed;right:12px;bottom:12px;z-index:5;font:inherit;font-size:12px;line-height:1.2;
+  padding:5px 11px;border-radius:999px;border:1px solid rgba(128,128,128,.45);background:rgba(128,128,128,.16);
+  color:inherit;opacity:.8;cursor:pointer;width:auto;min-height:0;text-decoration:none;touch-action:manipulation}
+.utz-change-folder:hover,.utz-change-folder:focus{opacity:1}
+.utz-change-folder[hidden]{display:none}
+</style>
+<!-- UTZLINE-CHANGE-FOLDER END -->
 </head>
 <body>
 
@@ -1097,7 +1203,8 @@
     <h2 class="section-title">Projects</h2>
     <div class="list" id="projectList"></div>
     <div class="empty-note" id="projectListEmpty" hidden>No projects found in this folder yet.</div>
-    <button class="btn link" id="chooseDifferentRootBtn">Choose a different Projects folder</button>
+    <button class="utz-change-folder" id="chooseDifferentRootBtn" type="button" title="Choose a different Projects folder">Change folder</button>
+    <div style="height:44px" aria-hidden="true"></div>
   </section>
 
   <!-- ALL PROJECTS -->
@@ -1151,7 +1258,7 @@
       <div class="table-scroll">
         <table class="data" id="allMonthlyTable">
           <thead>
-            <tr><th></th><th>Month</th><th class="num">Forecast</th><th class="num">Delivered (75%)</th><th class="num">Installed (100%)</th></tr>
+            <tr><th></th><th>Month</th><th class="num">Forecast</th><th class="num">Shop drawings (10%)</th><th class="num">Delivered (75%)</th><th class="num">Installed (100%)</th></tr>
           </thead>
           <tbody></tbody>
         </table>
@@ -1189,7 +1296,7 @@
       <div class="table-scroll">
         <table class="data" id="projMonthlyTable">
           <thead>
-            <tr><th></th><th>Month</th><th class="num">Forecast</th><th class="num">Delivered (75%)</th><th class="num">Installed (100%)</th></tr>
+            <tr><th></th><th>Month</th><th class="num">Forecast</th><th class="num">Shop drawings (10%)</th><th class="num">Delivered (75%)</th><th class="num">Installed (100%)</th></tr>
           </thead>
           <tbody></tbody>
         </table>
@@ -1201,7 +1308,7 @@
       <div class="table-scroll">
         <table class="data" id="projItemsTable">
           <thead>
-            <tr><th>Joinery ID</th><th>Description</th><th>Required delivery</th><th>Status</th><th class="num">Dollar value</th></tr>
+            <tr><th>Joinery ID</th><th>Description</th><th>Required delivery</th><th>Status</th><th class="num">Dollar value</th><th>Shop drawing sent</th></tr>
           </thead>
           <tbody></tbody>
         </table>
@@ -1210,7 +1317,7 @@
   </section>
 
 </main>
-<footer class="app-foot">UTZLINE $ Summary — RC 1.0 (v6), read live from your Projects folder</footer>
+<footer class="app-foot">UTZLINE $ Summary — RC 1.0 (v8), read live from your Projects folder</footer>
 
 <script src="./vendor/xlsx.full.min.js"></script>
 <script>
@@ -1474,6 +1581,73 @@
     return null;
   }
 
+  /* ---- (2026-09-30, v8) first SENT shop drawing per item ----
+     Andrew: "shop drawings account for 10% of each piece of joinery, in the $ app, these should be shown, base
+     it on if a shop drawing has been entered into the system as sent (Not job note) (once per joinery item) it
+     needs to be shown here in the monthly claim for the month they were uploaded". The Scheduler saves sent
+     drawings as Project Saves/Shop Drawings/<Level - Room - Code>/<group>/REV x - <stamp> - <name>.pdf with a
+     sidecar .json ({ part: "sent", at }); returned copies sit under <group>/Returned/ and don't count. The date
+     is the sidecar's "at", else the file name's stamp; a first-day "RevA" file with no stamp can't be dated
+     and is left out. Resolves { "<level>\u0001<room>\u0001<joineryId>": "YYYY-MM-DD" } (local dates). */
+  function sanitizeFileBase(name){
+    var cleaned = String(name || "").replace(/[<>:"/\\|?*\x00-\x1f]/g, "").trim().replace(/^[._]+|[._\s]+$/g, "");
+    return cleaned.slice(0, 80) || "item";
+  }
+  function listDirEntries(dh){
+    var out = [], it = dh.values();
+    function step(){ return it.next().then(function(r){ if (r.done) return out; if (r.value) out.push(r.value); return step(); }); }
+    return step();
+  }
+  function stampToLocalDate(stamp){
+    var m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2})-(\d{2})-(\d{2})/.exec(String(stamp || ""));
+    return m ? m[1] + "-" + m[2] + "-" + m[3] : "";
+  }
+  function isoToLocalDate(iso){
+    var d = new Date(iso); if (isNaN(d.getTime())) return "";
+    return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
+  }
+  function readFirstShopDrawingDates(projectHandle, rawItems){
+    var byKey = {};
+    return projectHandle.getDirectoryHandle("Project Saves", { create: false }).then(function(ps){ return ps.getDirectoryHandle("Shop Drawings", { create: false }); }).then(function(sd){
+      var wanted = {};
+      rawItems.forEach(function(it){ wanted[sanitizeFileBase(it.level) + " - " + sanitizeFileBase(it.room) + " - " + sanitizeFileBase(it.joineryId)] = (it.level || "") + "\u0001" + (it.room || "") + "\u0001" + (it.joineryId || ""); });
+      return listDirEntries(sd).then(function(itemDirs){
+        var p = Promise.resolve();
+        itemDirs.forEach(function(idir){
+          if (idir.kind !== "directory" || !wanted[idir.name]) return;
+          var key = wanted[idir.name];
+          p = p.then(function(){ return listDirEntries(idir); }).then(function(groups){
+            var q = Promise.resolve();
+            groups.forEach(function(g){
+              if (g.kind !== "directory") return;
+              q = q.then(function(){ return listDirEntries(g); }).then(function(files){
+                var sidecars = {};
+                files.forEach(function(f){ if (f.kind === "file" && /\.json$/i.test(f.name)) sidecars[f.name.replace(/\.json$/i, "")] = f; });
+                var r = Promise.resolve();
+                files.forEach(function(f){
+                  if (f.kind !== "file" || !/\.pdf$/i.test(f.name)) return; // Returned/ is a folder: skipped by design
+                  var base = f.name.replace(/\.pdf$/i, "");
+                  r = r.then(function(){
+                    var sc = sidecars[base] || sidecars[f.name];
+                    var dateP = sc ? sc.getFile().then(function(ff){ return ff.text(); }).then(function(t){ try{ var o = JSON.parse(t); if (o && o.part && o.part !== "sent") return null; return o && o.at ? isoToLocalDate(o.at) : ""; }catch(e){ return ""; } }, function(){ return ""; }) : Promise.resolve("");
+                    return dateP.then(function(d){
+                      if (d === null) return; // a returned copy's sidecar
+                      if (!d){ var m = /^(?:REV [A-Z0-9]+|Rev[A-Z]+) - (\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2})/.exec(f.name); d = m ? stampToLocalDate(m[1]) : ""; }
+                      if (!d) return;
+                      if (!byKey[key] || d < byKey[key]) byKey[key] = d;
+                    });
+                  });
+                });
+                return r;
+              }, function(){});
+            });
+            return q;
+          }, function(){});
+        });
+        return p;
+      });
+    }).then(function(){ return byKey; }, function(err){ if (isNotFoundErr(err)) return byKey; console.warn("Shop drawings couldn't be read for the 10% (left out):", err); return byKey; });
+  }
   function readProjectFull(projectHandle, folderName){
     return Promise.all([
       readProjectMeta(projectHandle),
@@ -1482,6 +1656,9 @@
       readJoinerySchedule(projectHandle)
     ]).then(function(r){
       var meta = r[0], rawItems = r[1], statusList = r[2], scheduleList = r[3];
+      return readFirstShopDrawingDates(projectHandle, rawItems).then(function(shopDates){ return { meta: meta, rawItems: rawItems, statusList: statusList, scheduleList: scheduleList, shopDates: shopDates }; });
+    }).then(function(r){
+      var meta = r.meta, rawItems = r.rawItems, statusList = r.statusList, scheduleList = r.scheduleList, shopDates = r.shopDates;
       var items = rawItems.map(function(it){
         var statusRec = findByKey(statusList, it.level, it.room, it.joineryId);
         var scheduleRec = findByKey(scheduleList, it.level, it.room, it.joineryId);
@@ -1490,7 +1667,8 @@
           description: it.description || "",
           dollarValue: Number(it.dollarValue) || 0,
           status: (statusRec && statusRec.status) || "created",
-          requiredDeliveryDate: (scheduleRec && scheduleRec.requiredDeliveryDate) || ""
+          requiredDeliveryDate: (scheduleRec && scheduleRec.requiredDeliveryDate) || "",
+          shopDrawingSentDate: shopDates[(it.level || "") + "\u0001" + (it.room || "") + "\u0001" + (it.joineryId || "")] || "" // (v8) first sent shop drawing
         };
       });
       return {
@@ -1660,14 +1838,20 @@
    * ============================================================ */
   function emptyMonthlyBuckets(){
     var m = {};
-    MONTHS.forEach(function(mo){ m[mo.key] = { forecast:0, delivered:0, installed:0 }; });
+    MONTHS.forEach(function(mo){ m[mo.key] = { forecast:0, shopSent:0, delivered:0, installed:0 }; }); // (v8) shopSent = the 10% in the month the first drawing was sent
     return m;
   }
   function aggregateProject(project){
     var buckets = emptyMonthlyBuckets();
-    var totals = { contract:0, deliveredToDate:0, installedToDate:0, unscheduled:0 };
+    var totals = { contract:0, shopSentToDate:0, deliveredToDate:0, installedToDate:0, unscheduled:0 };
     project.items.forEach(function(item){
       totals.contract += item.dollarValue;
+      // (v8) milestones are cumulative: 10% when the first shop drawing is sent, up to 75% delivered, up to 100% installed
+      if (item.shopDrawingSentDate){
+        totals.shopSentToDate += item.dollarValue * 0.10;
+        var sk = monthKeyOf(item.shopDrawingSentDate);
+        if (buckets[sk]) buckets[sk].shopSent += item.dollarValue * 0.10;
+      }
       if (item.status === "installed"){ totals.installedToDate += item.dollarValue; }
       else if (item.status === "delivered"){ totals.deliveredToDate += item.dollarValue * 0.75; }
       if (!item.requiredDeliveryDate){ totals.unscheduled += item.dollarValue; return; }
@@ -1694,6 +1878,7 @@
       var b = PROJECT_AGG[p.folderName].buckets;
       MONTHS.forEach(function(mo){
         COMPANY_BUCKETS[mo.key].forecast += b[mo.key].forecast;
+        COMPANY_BUCKETS[mo.key].shopSent += b[mo.key].shopSent;
         COMPANY_BUCKETS[mo.key].delivered += b[mo.key].delivered;
         COMPANY_BUCKETS[mo.key].installed += b[mo.key].installed;
       });
@@ -1742,6 +1927,7 @@
    * ============================================================ */
   var SERIES_DEFS = [
     { key:"forecast",  label:"Forecast",         color:"var(--series-forecast)"  },
+    { key:"shopSent",  label:"Shop drawings (10%)", color:"var(--series-shopsent)" },
     { key:"delivered", label:"Delivered (75%)",  color:"var(--series-delivered)" },
     { key:"installed", label:"Installed (100%)", color:"var(--series-installed)" }
   ];
@@ -1833,9 +2019,9 @@
 
     var values = MONTHS.map(function(mo){ return buckets[mo.key]; });
     var segValues = stacked ? values.map(function(v){
-      var installed = v.installed, delivered = v.delivered;
-      var outstanding = Math.max(0, v.forecast - v.delivered - v.installed);
-      return { installed: installed, delivered: delivered, outstanding: outstanding, total: installed + delivered + outstanding };
+      var installed = v.installed, delivered = v.delivered, shopSent = v.shopSent || 0;
+      var outstanding = Math.max(0, v.forecast - v.delivered - v.installed - shopSent); // (v8) the 10% already claimed comes off the outstanding part
+      return { installed: installed, delivered: delivered, shopSent: shopSent, outstanding: outstanding, total: installed + delivered + shopSent + outstanding };
     }) : null;
     var maxRaw = 0;
     if (stacked){
@@ -1888,6 +2074,7 @@
     var STACK_ORDER = [
       { segKey:"installed",   color:"var(--series-installed)"  },
       { segKey:"delivered",   color:"var(--series-delivered)"  },
+      { segKey:"shopSent",    color:"var(--series-shopsent)"   },
       { segKey:"outstanding", color:"var(--series-forecast)"   }
     ];
 
@@ -1911,7 +2098,7 @@
         groupBounds.push({ x0: padL + i*groupW, x1: padL + (i+1)*groupW });
       });
     } else {
-      var barW = Math.max(1, (groupW - groupPad*2 - barGap*2) / 3);
+      var barW = Math.max(1, (groupW - groupPad*2 - barGap*3) / 4); // (v8) four bars
       MONTHS.forEach(function(mo, i){
         var v = values[i];
         var gx0 = padL + i*groupW + groupPad;
@@ -1950,6 +2137,7 @@
         var sv = segValues[i];
         rows = '<div class="tt-row"><span class="k fillkey" style="background:var(--series-installed)"></span><span>Installed (100%)</span><span class="v">'+money(sv.installed)+'</span></div>' +
                '<div class="tt-row"><span class="k fillkey" style="background:var(--series-delivered)"></span><span>Delivered (75%)</span><span class="v">'+money(sv.delivered)+'</span></div>' +
+               '<div class="tt-row"><span class="k fillkey" style="background:var(--series-shopsent)"></span><span>Shop drawings (10%)</span><span class="v">'+money(sv.shopSent)+'</span></div>' +
                '<div class="tt-row"><span class="k fillkey" style="background:var(--series-forecast)"></span><span>Outstanding forecast</span><span class="v">'+money(sv.outstanding)+'</span></div>' +
                '<div class="tt-row" style="border-top:1px solid var(--chart-grid);margin-top:6px;padding-top:6px;"><span>Total scheduled</span><span class="v">'+money(v.forecast)+'</span></div>';
         topVal = sv.total;
@@ -2192,24 +2380,24 @@
 
   function renderMonthlyTable(tbody, buckets, selectedSet, onToggle){
     tbody.innerHTML = "";
-    var totals = { forecast:0, delivered:0, installed:0 };
+    var totals = { forecast:0, shopSent:0, delivered:0, installed:0 };
     MONTHS.forEach(function(mo){
       var v = buckets[mo.key];
-      totals.forecast += v.forecast; totals.delivered += v.delivered; totals.installed += v.installed;
+      totals.forecast += v.forecast; totals.shopSent += v.shopSent || 0; totals.delivered += v.delivered; totals.installed += v.installed;
       var tr = document.createElement("tr");
       var tdChk = document.createElement("td"); tdChk.className = "chk";
       var cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = selectedSet.has(mo.key);
       cb.addEventListener("change", function(){ if (cb.checked) selectedSet.add(mo.key); else selectedSet.delete(mo.key); onToggle(); });
       tdChk.appendChild(cb); tr.appendChild(tdChk);
       var tdMonth = document.createElement("td"); tdMonth.textContent = mo.label; tr.appendChild(tdMonth);
-      ["forecast","delivered","installed"].forEach(function(k){
-        var td = document.createElement("td"); td.className = "num"; td.textContent = money(v[k]); tr.appendChild(td);
+      ["forecast","shopSent","delivered","installed"].forEach(function(k){
+        var td = document.createElement("td"); td.className = "num"; td.textContent = money(v[k] || 0); tr.appendChild(td);
       });
       tbody.appendChild(tr);
     });
     var trTotal = document.createElement("tr");
     trTotal.className = "total-row";
-    trTotal.innerHTML = "<td></td><td>Total</td><td class=\"num\">"+money(totals.forecast)+"</td><td class=\"num\">"+money(totals.delivered)+"</td><td class=\"num\">"+money(totals.installed)+"</td>";
+    trTotal.innerHTML = "<td></td><td>Total</td><td class=\"num\">"+money(totals.forecast)+"</td><td class=\"num\">"+money(totals.shopSent)+"</td><td class=\"num\">"+money(totals.delivered)+"</td><td class=\"num\">"+money(totals.installed)+"</td>";
     tbody.appendChild(trTotal);
   }
 
@@ -2326,16 +2514,18 @@
   }
 
   function renderAll(){
-    var companyTotals = { contract:0, deliveredToDate:0, installedToDate:0 };
+    var companyTotals = { contract:0, shopSentToDate:0, deliveredToDate:0, installedToDate:0 };
     PROJECTS.forEach(function(p){
       var t = PROJECT_AGG[p.folderName].totals;
       companyTotals.contract += t.contract;
+      companyTotals.shopSentToDate += t.shopSentToDate || 0;
       companyTotals.deliveredToDate += t.deliveredToDate;
       companyTotals.installedToDate += t.installedToDate;
     });
     var statRow = document.getElementById("allStatRow");
     statRow.innerHTML =
       tile("Total contract value (all projects)", money(companyTotals.contract), "forecast") +
+      tile("Shop drawings sent (10% earned)", money(companyTotals.shopSentToDate), "shopsent") +
       tile("Delivered to date (75% earned)", money(companyTotals.deliveredToDate), "delivered") +
       tile("Installed to date (100% earned)", money(companyTotals.installedToDate), "installed");
 
@@ -2380,18 +2570,18 @@
   document.getElementById("exportAllBtn").addEventListener("click", function(){
     var months = MONTHS.filter(function(mo){ return allSelectedMonths.has(mo.key); });
     if (!months.length){ showToast("Tick at least one month to export."); return; }
-    var summaryRows = [["Month","Forecast","Delivered (75%)","Installed (100%)"]];
+    var summaryRows = [["Month","Forecast","Shop drawings (10%)","Delivered (75%)","Installed (100%)"]];
     months.forEach(function(mo){
       var v = COMPANY_BUCKETS[mo.key];
-      summaryRows.push([mo.label, v.forecast, v.delivered, v.installed]);
+      summaryRows.push([mo.label, v.forecast, v.shopSent || 0, v.delivered, v.installed]);
     });
     var sheets = [{ name:"All projects", rows: summaryRows }];
     PROJECTS.forEach(function(p){
       var agg = PROJECT_AGG[p.folderName];
-      var rows = [["Month","Forecast","Delivered (75%)","Installed (100%)"]];
+      var rows = [["Month","Forecast","Shop drawings (10%)","Delivered (75%)","Installed (100%)"]];
       months.forEach(function(mo){
         var v = agg.buckets[mo.key];
-        rows.push([mo.label, v.forecast, v.delivered, v.installed]);
+        rows.push([mo.label, v.forecast, v.shopSent || 0, v.delivered, v.installed]);
       });
       sheets.push({ name: (p.no || p.name || p.folderName).slice(0,28), rows: rows });
     });
@@ -2417,6 +2607,7 @@
     var statRow = document.getElementById("projStatRow");
     statRow.innerHTML =
       tile("Contract value", money(agg.totals.contract), "forecast") +
+      tile("Shop drawings sent (10% earned)", money(agg.totals.shopSentToDate || 0), "shopsent") +
       tile("Delivered to date (75% earned)", money(agg.totals.deliveredToDate), "delivered") +
       tile("Installed to date (100% earned)", money(agg.totals.installedToDate), "installed");
 
@@ -2459,21 +2650,22 @@
         "<td>" + escapeHtml(item.description) + "</td>" +
         "<td>" + (item.requiredDeliveryDate ? escapeHtml(item.requiredDeliveryDate) : "<span style=\"color:var(--muted)\">—</span>") + "</td>" +
         "<td>" + escapeHtml(STATUS_LABEL[item.status] || item.status) + "</td>" +
-        "<td class=\"num\">" + money(item.dollarValue) + "</td>";
+        "<td class=\"num\">" + money(item.dollarValue) + "</td>" +
+        "<td>" + (item.shopDrawingSentDate ? escapeHtml(item.shopDrawingSentDate) + " <span style=\"color:var(--muted)\">(" + money(item.dollarValue * 0.10) + ")</span>" : "<span style=\"color:var(--muted)\">—</span>") + "</td>";
       itemsBody.appendChild(tr);
     });
 
     document.getElementById("exportProjBtn").onclick = function(){
       var months = MONTHS.filter(function(mo){ return projSelectedMonths[folderName].has(mo.key); });
       if (!months.length){ showToast("Tick at least one month to export."); return; }
-      var rows = [["Month","Forecast","Delivered (75%)","Installed (100%)"]];
+      var rows = [["Month","Forecast","Shop drawings (10%)","Delivered (75%)","Installed (100%)"]];
       months.forEach(function(mo){
         var v = agg.buckets[mo.key];
-        rows.push([mo.label, v.forecast, v.delivered, v.installed]);
+        rows.push([mo.label, v.forecast, v.shopSent || 0, v.delivered, v.installed]);
       });
-      var itemRows = [["Joinery ID","Description","Required delivery","Status","Dollar value"]];
+      var itemRows = [["Joinery ID","Description","Required delivery","Status","Dollar value","Shop drawing sent","Shop drawing (10%)"]];
       p.items.forEach(function(item){
-        itemRows.push([item.joineryId, item.description, item.requiredDeliveryDate, STATUS_LABEL[item.status] || item.status, item.dollarValue]);
+        itemRows.push([item.joineryId, item.description, item.requiredDeliveryDate, STATUS_LABEL[item.status] || item.status, item.dollarValue, item.shopDrawingSentDate || "", item.shopDrawingSentDate ? item.dollarValue * 0.10 : 0]);
       });
       exportWorkbook("UTZLINE-dollar-summary-" + (p.no || p.folderName) + ".xlsx", [
         { name:"Monthly breakdown", rows: rows },
@@ -2573,6 +2765,7 @@
     ready: function(){ return true; },
     getMonthKeysForTest: function(){ return MONTHS.map(function(m){ return m.key; }); },
     readProjectFullForTest: function(projectHandle, folderName){ return readProjectFull(projectHandle, folderName); }, // (v6) event layout v2
+    aggregateProjectForTest: function(project){ return aggregateProject(project); }, // (v8) shop drawings 10%
     setProjectsForTest: function(projects){
       PROJECTS = projects.slice();
       rebuildAggregates();

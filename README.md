@@ -1,6 +1,15 @@
 # UTZLINE $ Summary — installable app
 
-**Current version: v6 (RC 1.0)** (its own independent version line, separate from every other app in the family — bump this line, and add a dated entry below, every time a new build ships.)
+**Current version: v8 (RC 1.0)** (its own independent version line, separate from every other app in the family — bump this line, and add a dated entry below, every time a new build ships.)
+
+**v8 (2026-09-30) — RC 1.0: shop drawings = 10% in the month they were sent, day / night mode.**
+
+- Andrew: *"shop drawings account for 10% of each piece of joinery, in the $ app, these should be shown, base it on if a shop drawing has been entered into the system as sent (Not job note) (once per joinery item) it needs to be shown here in the monthly claim for the month they were uploaded"*: a new **Shop drawings (10%)** milestone -- 10% of the item's value, once, in the month its **first sent** shop drawing was uploaded (the Scheduler's record of the upload; returned copies and job notes don't count; a first-day drawing with no date can't be placed and is left out). Milestones are cumulative: 10% sent → 75% delivered → 100% installed. It has its own series in the chart (and segment in the stacked one), a column in the monthly tables and the Excel export, a stat tile (*Shop drawings sent (10% earned)*), and the items table / sheet show each item's sent date.
+- **Day / night mode** (Andrew: *"give me day / night mode for all apps"*): a ☀ / ☾ button at the top right of every screen switches between the dark look and a new light one; with nothing chosen the app follows the device's own setting. The choice is kept per device and shared by the UTZLINE apps on it.
+
+**v7 (2026-09-30) — RC 1.0: the Change folder button moves to the bottom right, smaller.**
+
+- Andrew: *"move the change folder to the bottom right of the page, and smaller"*. The **Change folder** control on the project list is now a small button fixed to the bottom-right corner of the screen (its tooltip keeps the full wording, *Choose a different Projects folder*) instead of a full-size button / link in the list.
 
 **v6 (2026-09-30) — RC 1.0: records are kept one folder per level — much faster on a tablet.**
 
