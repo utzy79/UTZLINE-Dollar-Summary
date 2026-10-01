@@ -94,7 +94,8 @@ var ICON_VERSION = "v1";
 // v6 (2026-09-30): RC 1.0 -- event layout v2: status / schedule / cut / completion / cutting file / note records are one folder per LEVEL (Project Saves/UTZLINE Events/<branch>/<Level>/); old per-item folders are still read.
 // v7 (2026-09-30): RC 1.0 -- change-folder button.
 // v8 (2026-09-30): RC 1.0 -- shop drawings = 10% in the month they were sent, day / night mode.
-var CACHE_NAME = "utzline-dollar-summary-cache-v8";
+// v9 (2026-10-01): RC 1.0 -- Windows' 260-character path limit: shorter record names in the event store (see README)
+var CACHE_NAME = "utzline-dollar-summary-cache-v9";
 
 var PRECACHE_URLS = [
   "./",
