@@ -1,6 +1,14 @@
 # UTZLINE $ Summary — installable app
 
-**Current version: v12 (RC 1.0)** (its own independent version line, separate from every other app in the family — bump this line, and add a dated entry below, every time a new build ships.)
+**Current version: v13 (RC 1.0)** (its own independent version line, separate from every other app in the family — bump this line, and add a dated entry below, every time a new build ships.)
+
+**v13 (2026-10-02) — RC 1.0: builder logo on the top bar, logos folder, reversed Machined.**
+
+- **Builder logo at the far right of the top bar** (Andrew: *"builder logo on the far right of the top bar"*): one logo in the header, just left of the day / night button, shown only while a project is open and the builder has a logo (it is hidden on the project list).
+- **Company and builder logos live in a `logos` folder** at the Projects root (Andrew: *"move the company and builders logos into a logos folder"*). Every app reads `logos/` first and falls back to the old root files, so nothing breaks before the move; UTZLINE Projects writes only into `logos/` and copies the root files across once (copies -- nothing is moved or deleted). `logos` is never listed as a project.
+- **Reversed Machined** (Andrew: *"if something is flagged as machined, but then the machining gets reversed, the flags need to be reversed also"*): the status now honours the Machine Schedule's `statusRetract` event -- undo a cut there and this app drops the item back to its earlier stage too (history shows the entry struck through, then "reversed"). Later re-machining counts normally.
+- **Day mode**: the company-wide chart card keeps its dark chart surface, and its heading was dark text on it (invisible) -- now uses the chart ink.
+- **Dark mode controls**: drop-downs, their open lists, text boxes and buttons that no style had touched now get a real dark background and readable text (one shared rule), and the day / night contrast was swept for white-on-pale text. (There is no sign-in in this app, so there is no "Opening…" cover to add.)
 
 **v12 (2026-10-01) — RC 1.0: code-only file names -- joinery codes, not descriptions, in every file and folder name (path-limit round, fourth build).**
 
