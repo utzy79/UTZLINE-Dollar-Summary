@@ -1,6 +1,29 @@
 # UTZLINE $ Summary — installable app
 
-**Current version: v13 (RC 1.0)** (its own independent version line, separate from every other app in the family — bump this line, and add a dated entry below, every time a new build ships.)
+**Current version: v19 (RC 1.0)** (its own independent version line, separate from every other app in the family — bump this line, and add a dated entry below, every time a new build ships.)
+
+**v19 (2026-10-02): PINs scrambled, blank PIN = choose a new one.** PINs in `utzline-users.csv` are saved scrambled (`h1:<salt>:<sha-256>`), so the file no longer shows them. A plain PIN already in the file still works and is scrambled the next time an app saves the file. A BLANK PIN cell means reset: the next sign-in as that name asks for a new PIN (twice). Update every device before anyone adds a name: an older app cannot read a scrambled PIN. A 4-digit PIN can still be guessed from the file, so keep the file private in OneDrive too.
+
+**v18 (2026-10-02):** the "Project Archive" and "Project Activity" folders are never listed as projects (archived projects still count here, to keep financial history).
+
+**v17 (2026-10-02) — RC 1.0: each project has its own colour.**
+
+- Andrew: *"differnt projects to inherit different colours (keeps that colour for the life of the project)"* and *"then the bars here get shaded the same"*. Every project now has its own colour, shown as a dot beside its name on the Home list, the "Monthly summary by project" cards and the project page, as its bar in the company-wide chart (and its row in the hover box), and as the colour of the bars on its own card (lighter = forecast, solid = installed).
+- How a colour is chosen: this app never writes the Projects folder, so the colour is picked the first time the project is seen (least-used colour first, projects taken in job-number order) and **remembered on this device**; it never changes after that, whatever projects are added, finished or sorted differently. A `"color": "#rrggbb"` in the project's `project-meta.json` (for a later UTZLINE Projects update to write, so every app and device agrees) wins over the remembered one. The 8 colours are the validated dark-surface categorical set; past 8 projects colours are reused, least-used first.
+- Tested: `pdftest-dollar-summary/run_dollar_summary_v17_project_colours.js`.
+- **Change folder needs an administrator PIN, in every app.** Andrew: *"to chose another folder you must enter an administrator pin (on any app)"* and *"Andrew Utz will be the Administrator for now, but possibility to change it later"*. Pressing Change folder now opens a small numberpad that only an administrator's PIN (checked against `utzline-users.csv`) will pass, then the folder picker. The administrators are the names in `utzline-admins.json` at the Projects root (`{"admins":["Andrew Utz"]}`); until that file exists it is just Andrew Utz, and it can be changed later by editing that one file. If the user list can't be read (no folder, permission lapsed, file gone) or no administrator has a PIN in it, the change is allowed so nobody is ever locked out of a lost folder. Reconnect Folder (same folder) is unchanged.
+
+**v16 (2026-10-02) — RC 1.0: day-mode contrast fix.**
+
+- Andrew: *"and this will need fixing in the $ app also"* (screenshot of day mode). The chart panels stay dark in day mode, but the project names and **Open** buttons on the per-project cards used the day-mode dark text (dark on dark), and the hover tooltip took the day-mode beige background with light text. Fixed: project names use the chart ink colour, the Open button on a chart card uses chart ink + a dark-surface border, and the tooltip is always a dark panel. Night mode is unchanged.
+
+**v15 (2026-10-02) — RC 1.0: job notes are IFC.**
+
+- Andrew: *"change JN to IFC"*. Job notes are now **IFC** (Issued For Construction): the folder under `PDFs\` is `PDFs\IFC\<Level>\<Room>\<item>\` (was `PDFs\JN\...`), and a job note's file name carries ` -- IFC -- ` (`<project> -- IFC -- <room> - <code> - <saved>.pdf`; Site Measure and the Scheduler write them). Shared folder code (`UtzItemFiles`), so every app reads the same place; the code still says "JN" internally, only the folder and the tag read IFC. Old `PDFs\JN` folders are not read any more (Andrew: happy to lose old files as long as new ones work); his existing 3749 job notes were renamed and moved to `PDFs\IFC`.
+
+**v14 (2026-10-02) — RC 1.0: job notes and shop drawings are in room folders.**
+
+- Andrew: "i want every room to have a folder, then the joinery within it" (then "im happy to lose old files, as long as new ones work"). This app reads shop drawings (the 10% date) in `PDFs\JN\<Level>\<Room>\<item>\` and `PDFs\SD\<Level>\<Room>\<item>\<drawing>\` (room = the room number; level cut to 30; "No level" / "No room" when unknown). The old `Project Saves\Job Notes` and `Project Saves\Shop Drawings` folders are no longer read (nothing moved or deleted; `DOC_READ_OLD` in the shared item-files module switches reading them back on). Site Measure, Viewer and every other app changed in the same round, so they all look in the same place. The Windows 260-character path check counts the new folders.
 
 **v13 (2026-10-02) — RC 1.0: builder logo on the top bar, logos folder, reversed Machined.**
 

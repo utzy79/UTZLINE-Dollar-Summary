@@ -526,6 +526,21 @@
       return url;
     });
   }
+  // ---- the COMPANY logo in the centre of the top bar (2026-10-02: "put the company logo in the top header ... full height of header, in the centre") ----
+  // setTopCompany(dataUrlOrUrl) shows / updates / hides one <img class="utz-top-company"> in the app's <header>
+  function setTopCompany(url){
+    var header = document.querySelector("header");
+    if (!header) return;
+    var img = header.querySelector(":scope > img.utz-top-company");
+    if (!url){ if (img){ img.hidden = true; img.removeAttribute("src"); } return; }
+    if (!img){
+      img = document.createElement("img"); img.className = "utz-top-company"; img.alt = "Company logo";
+      header.appendChild(img);
+    }
+    try{ if (window.getComputedStyle(header).position === "static") header.style.position = "relative"; }catch(e){}
+    if (img.getAttribute("src") !== url) img.src = url;
+    img.hidden = false;
+  }
   // Projects only: copy the logo files an older layout left at the Projects root into logos/ (copies, never moves or deletes)
   function migrate(rootH){
     if (!rootH || typeof rootH.values !== "function") return Promise.resolve(0);
@@ -554,7 +569,7 @@
       });
     }).then(function(n){ if (n) forget(rootH); return n; }, function(){ return 0; });
   }
-  window.UtzBuilders = { FILE: FILE, PREFIX: PREFIX, list: list, add: add, setLogo: setLogo, logoUrl: logoUrl, logoDataUrl: logoDataUrl, contractorOf: contractorOf, mount: mount, forget: forget, slug: slug, downscale: downscale, logoFileHandle: logoFileHandle, logosDir: logosDir, migrate: migrate, LOGOS: LOGOS };
+  window.UtzBuilders = { setTopCompany: setTopCompany, FILE: FILE, PREFIX: PREFIX, list: list, add: add, setLogo: setLogo, logoUrl: logoUrl, logoDataUrl: logoDataUrl, contractorOf: contractorOf, mount: mount, forget: forget, slug: slug, downscale: downscale, logoFileHandle: logoFileHandle, logosDir: logosDir, migrate: migrate, LOGOS: LOGOS };
 })();
 </script>
 <style>
@@ -565,6 +580,10 @@
   img.utz-top-builder{ order: 99; height: 30px; max-width: 200px; width: auto; flex: 0 0 auto; box-sizing: border-box; object-fit: contain; border-radius: 4px; background: #fff; padding: 2px; margin-left: 4px; }
   img.utz-top-builder[hidden]{ display: none; }
   @media (max-width: 700px){ img.utz-top-builder{ max-width: 110px; } }
+  /* ---- the company logo in the centre of the top bar (2026-10-02) -- full height of the header ---- */
+  img.utz-top-company{ position: absolute; left: 50%; top: 6px; bottom: 6px; height: calc(100% - 12px); width: auto; max-width: 260px; transform: translateX(-50%); object-fit: contain; box-sizing: border-box; background: #fff; padding: 2px; border-radius: 4px; pointer-events: none; }
+  img.utz-top-company[hidden]{ display: none; }
+  @media (max-width: 760px){ img.utz-top-company{ display: none; } }
 </style>
 <!-- UTZLINE-BUILDERS END -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -783,8 +802,8 @@
   .chart-tooltip{
     position:absolute;
     pointer-events:none;
-    background: var(--utz-deep, var(--utz-deep, var(--utz-deep, #0d0d0c)));
-    border: 1px solid var(--chart-grid);
+    background: #0d0d0c; /* (2026-10-02) fixed dark: --utz-deep turns beige in day mode, which put light text on beige */
+    border: 1px solid var(--chart-baseline);
     border-radius: 8px;
     padding: 8px 10px;
     font-size: 12px;
@@ -805,7 +824,10 @@
   .mini-chart-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(340px,1fr)); gap:14px; }
   .mini-chart-card{ background: var(--chart-surface); border:1px solid var(--border); border-radius:10px; padding:12px; }
   .mini-chart-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:6px; }
-  .mini-chart-head .name{ font-weight:600; font-size:13px; line-height:1.3; }
+  .mini-chart-head .name{ font-weight:600; font-size:13px; line-height:1.3; color: var(--chart-ink); } /* (2026-10-02) dark card in day mode: project name was dark-on-dark */
+  .mini-chart-card .btn.secondary{ color: var(--chart-ink); border-color: var(--chart-baseline); } /* same for the Open button */
+  .mini-chart-card .btn.secondary:hover{ background: var(--chart-grid); }
+  .proj-dot{ display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:7px; vertical-align:baseline; flex:0 0 auto; }
   .mini-chart-head .value{ font-size:12px; color:var(--chart-muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
   .mini-unscheduled-note{ font-size:11px; color:var(--warn); margin-top:6px; }
 
@@ -906,7 +928,7 @@
 
   // Each project's items, as read by the app: project (its folder name) ->
   // { triple -> fileKey }. The project read last is the "current" one.
-  var maps = {}, current = null;
+  var maps = {}, current = null, rev = {};
   function register(project, items){
     var m = {};
     (Array.isArray(items) ? items : []).forEach(function(it){
@@ -916,11 +938,27 @@
     });
     project = String(project || "");
     maps[project] = m; current = project;
+    // (2026-10-02) and the other way round: file name -> where the item is (its level and room), for the
+    // PDFs\IFC / PDFs\SD folders (docsDir below). The first record of a file name decides, like the map above.
+    var r = {};
+    (Array.isArray(items) ? items : []).forEach(function(it){
+      if (!it || typeof it !== "object") return;
+      var k = valid(it.fileKey) ? it.fileKey : baseOf(it.joineryId, it.room), lk = low(k);
+      if (!(lk in r)) r[lk] = { level: it.level == null ? "" : String(it.level), room: it.room == null ? "" : String(it.room) };
+    });
+    rev[project] = r;
     return m;
   }
   // An item's file name from its level, room and code (project: its folder
   // name, when the app knows it -- the schedules' Overall views hold several).
   function fileKey(level, room, code, project){
+    var r = fileKeyRaw(level, room, code, project), proj = project != null ? String(project) : (current != null ? current : ""), lk = low(r);
+    // remember where a file name the project's items don't list lives (a marker not in joinery-items.json yet)
+    if (!rev[proj]) rev[proj] = {};
+    if (!(lk in rev[proj])) rev[proj][lk] = { level: level == null ? "" : String(level), room: room == null ? "" : String(room) };
+    return r;
+  }
+  function fileKeyRaw(level, room, code, project){
     var t = tripleKey(level, room, code), hit;
     if (project != null && maps[String(project)]){
       hit = maps[String(project)][t];
@@ -949,10 +987,257 @@
     return p(d.getFullYear() % 100) + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + "-" + p(d.getMinutes()) + "-" + p(d.getSeconds()) + (ms ? "-" + p(d.getMilliseconds(), 3) : "");
   }
 
+  // (2026-10-02) One site measure covers every item linked to a room: the folder under Site Measures that holds
+  // it is named by level + room ("Room - L1 - Room 101"), never by an item. A long name is cut and given a short
+  // hash so two long room names can't meet. -> a name that goes on disk as given.
+  function roomMeasureKey(level, room){
+    var l = clean(level, 14), r = clean(room, 24) || "Room";
+    var cut = String(level == null ? "" : level).length > 14 || String(room == null ? "" : room).length > 24;
+    var k = "Room - " + (l ? l + " - " : "") + r;
+    if (cut || l !== String(level == null ? "" : level).trim() || r !== String(room == null ? "" : room).trim()){
+      var h = 0, src = low(level) + "|" + low(room);
+      for (var i = 0; i < src.length; i++) h = (h * 31 + src.charCodeAt(i)) >>> 0;
+      var hs = h.toString(36).slice(0, 4);
+      if (cut) k = k + " ~" + hs;
+    }
+    return k;
+  }
+
+
+  /* ============================== job notes and shop drawings in PDFs\IFC and PDFs\SD (2026-10-02) ==============================
+     Andrew: "i want every room to have a folder, then the joinery within it" -- job notes and shop drawings now live in
+         PDFs\IFC\<Level>\<Room>\<item file name>\Job note - <stamp> - <code>.pdf
+         PDFs\SD\<Level>\<Room>\<item file name>\<drawing>\REV n - <stamp> - <code>.pdf   (+ Returned\, Approved\)
+     (level cut to 30 like the event folders, room = the room NUMBER, "No level" / "No room" when unknown). The older
+         Project Saves\Job Notes\<item file name>\   and   Project Saves\Shop Drawings\<item file name>\
+     are no longer read (DOC_READ_OLD; Andrew is happy to lose them) and nothing is moved or deleted. docsDir() hands back
+     a stand-in folder (it can list a second, older folder together with the new one, which DOC_READ_OLD switches on).
+     An item moved to another room afterwards keeps its files in the old room's folder: they are not listed with the
+     item (logged in the notes). */
+  var DOC_OLD = { JN: "Job Notes", SD: "Shop Drawings" };
+  // (v98+) the folder under PDFs\ for each kind: job notes are "IFC" (Issued For Construction -- Andrew 2026-10-02: "change JN to IFC"); the code
+  // (and every call site) still says "JN" -- only the folder and the file-name tag read IFC.
+  var DOC_NEW = { JN: "IFC", SD: "SD" };
+  // (2026-10-02, Andrew: "im happy to lose old files, as long as new ones work") the older Project Saves folders
+  // are NOT read any more; set true to list them together with the new ones again.
+  var DOC_READ_OLD = false;
+  var NO_WHERE = { level: "", room: "" }; // an item the app can't place: PDFs\IFC\No level\No room\<item>
+  function levelSeg(level){
+    if (window.UtzEvents && UtzEvents.levelFolder) return UtzEvents.levelFolder(level);
+    return clean(level, 30) || "No level";
+  }
+  // the room NUMBER: the first part with a digit ("H1.MH.040", "101"); no number: the name itself, cut to 14
+  function roomShort(room){
+    var t = String(room || "").trim().split(/\s+/).filter(Boolean), pick = "";
+    for (var i = 0; i < t.length; i++){ if (/\d/.test(t[i])){ pick = t[i]; break; } }
+    return clean(pick || t.join(" "), 14);
+  }
+  function roomSeg(room){ return roomShort(room) || "No room"; }
+  // where an item is: from the items the app read for this project (register), else any project that has the name
+  // once, else the event store's own memory of the key.
+  function where(key, project){
+    var lk = low(key), hit = null;
+    if (project != null && rev[String(project)] && rev[String(project)][lk]) return rev[String(project)][lk];
+    var n = 0;
+    Object.keys(rev).forEach(function(p){ if (rev[p][lk]){ n++; hit = rev[p][lk]; } });
+    if (n === 1) return hit;
+    if (n === 0 && window.UtzEvents && UtzEvents.where){ var w = UtzEvents.where(key); if (w) return w; }
+    return null;
+  }
+  function newDocSegs(branch, key, loc){
+    loc = loc || NO_WHERE;
+    return ["PDFs", DOC_NEW[branch] || branch, levelSeg(loc.level), roomSeg(loc.room), String(key)];
+  }
+  function oldDocSegs(branch, key){ return ["Project Saves", DOC_OLD[branch], String(key)]; }
+  // the folders (from the project folder) a new file for this item is written under -- for the path-length check
+  function docPathSegs(project, branch, key, sub, loc){
+    return newDocSegs(branch, key, loc || where(key, project)).concat(sub || []);
+  }
+
+  function nfErr(name){
+    var e;
+    try{ e = new DOMException("A requested file or directory could not be found: " + name, "NotFoundError"); }
+    catch(x){ e = new Error("A requested file or directory could not be found: " + name); e.name = "NotFoundError"; }
+    return e;
+  }
+  function isNF(err){ return !!(err && (err.name === "NotFoundError" || err.name === "TypeMismatchError" || err.code === 8)); }
+  // folder handles found on the way are remembered per project (a lookup is a quarter of a second on a tablet)
+  var dirMemo = typeof WeakMap === "function" ? new WeakMap() : null;
+  function memoOf(ph){
+    if (!dirMemo) return {};
+    var m = dirMemo.get(ph);
+    if (!m){ m = {}; dirMemo.set(ph, m); }
+    return m;
+  }
+  function walkDirs(ph, segs, create){
+    var m = memoOf(ph), start = 0, cur = ph;
+    for (var i = segs.length - 1; i >= 0; i--){
+      var h = m[segs.slice(0, i + 1).join("\u0000")];
+      if (h){ cur = h; start = i + 1; break; }
+    }
+    var p = Promise.resolve(cur);
+    segs.forEach(function(sg, j){
+      if (j < start) return;
+      p = p.then(function(d){
+        return d.getDirectoryHandle(sg, { create: !!create }).then(function(n){ m[segs.slice(0, j + 1).join("\u0000")] = n; return n; });
+      });
+    });
+    return p.then(null, function(err){
+      if (!isNF(err) && start > 0 && dirMemo) dirMemo.delete(ph); // a remembered handle that failed: forget them all
+      throw err;
+    });
+  }
+  function tryWalk(ph, segs){ return walkDirs(ph, segs, false).then(null, function(err){ if (isNF(err)) return null; throw err; }); }
+  function tryGet(h, method, name){
+    if (!h) return Promise.resolve(null);
+    return h[method](name, { create: false }).then(null, function(err){ if (isNF(err)) return null; throw err; });
+  }
+  function listHandles(h){
+    var out = [];
+    if (!h || typeof h.values !== "function") return Promise.resolve(out);
+    var it = h.values();
+    function step(){ return it.next().then(function(r){ if (r.done) return out; if (r.value) out.push(r.value); return step(); }); }
+    return step();
+  }
+  function iterOver(listP, map){
+    var items = null, i = 0, p = null;
+    var it = { next: function(){
+      if (!p) p = listP().then(function(l){ items = l; });
+      return p.then(function(){ return i < items.length ? { done: false, value: map(items[i++]) } : { done: true, value: undefined }; });
+    } };
+    if (typeof Symbol !== "undefined" && Symbol.asyncIterator) it[Symbol.asyncIterator] = function(){ return it; };
+    return it;
+  }
+
+  // The stand-in folder: `main` is where new files go (the new folder, or the old one for an item that can't be
+  // placed), `alt` the other place to look (the old folder); either may not exist yet -- `main` is made on the
+  // first write, at mainSegs. Listings, lookups and writes work as on a real folder handle.
+  function Ov(ph, mainSegs, main, alt){
+    this.ph = ph; this.mainSegs = mainSegs; this.main = main || null; this.alt = alt || null;
+    this.kind = "directory";
+    this.name = (this.main && this.main.name) || (this.alt && this.alt.name) || mainSegs[mainSegs.length - 1];
+  }
+  Ov.prototype.isUtzOverlay = true;
+  Ov.prototype._ensure = function(){
+    var s = this;
+    if (s.main) return Promise.resolve(s.main);
+    return walkDirs(s.ph, s.mainSegs, true).then(function(h){ s.main = h; return h; });
+  };
+  Ov.prototype.getDirectoryHandle = function(name, opts){
+    var s = this, create = !!(opts && opts.create);
+    return Promise.all([tryGet(s.main, "getDirectoryHandle", name), tryGet(s.alt, "getDirectoryHandle", name)]).then(function(r){
+      if (r[0] || r[1]) return new Ov(s.ph, s.mainSegs.concat(name), r[0], r[1]);
+      if (!create) throw nfErr(name);
+      return s._ensure().then(function(m){ return m.getDirectoryHandle(name, { create: true }); }).then(function(c){
+        return new Ov(s.ph, s.mainSegs.concat(name), c, null);
+      });
+    });
+  };
+  Ov.prototype.getFileHandle = function(name, opts){
+    var s = this, create = !!(opts && opts.create);
+    return Promise.all([tryGet(s.main, "getFileHandle", name), tryGet(s.alt, "getFileHandle", name)]).then(function(r){
+      if (r[0] || r[1]) return r[0] || r[1];
+      if (!create) throw nfErr(name);
+      return s._ensure().then(function(m){ return m.getFileHandle(name, { create: true }); });
+    });
+  };
+  // (only the new folder is tried first; the old one only when the name isn't there)
+  Ov.prototype.removeEntry = function(name, opts){
+    var s = this;
+    function rm(h){ return h ? h.removeEntry(name, opts) : Promise.reject(nfErr(name)); }
+    return rm(s.main).then(null, function(err){ if (!isNF(err)) throw err; return rm(s.alt); });
+  };
+  Ov.prototype._list = function(){
+    var s = this;
+    return Promise.all([listHandles(s.main), listHandles(s.alt)]).then(function(r){
+      var by = {}, order = [];
+      [r[0], r[1]].forEach(function(list, side){
+        list.forEach(function(e){
+          var slot = by[e.name];
+          if (!slot){ slot = by[e.name] = {}; order.push(e.name); }
+          var k = side === 0 ? "m" : "a";
+          if (!slot[k]) slot[k] = e;
+        });
+      });
+      return order.map(function(nm){
+        var sl = by[nm], e = sl.m || sl.a;
+        var md = sl.m && sl.m.kind === "directory" ? sl.m : null, ad = sl.a && sl.a.kind === "directory" ? sl.a : null;
+        return (md || ad) ? new Ov(s.ph, s.mainSegs.concat(nm), md, ad) : e;
+      });
+    });
+  };
+  Ov.prototype.values = function(){ return iterOver(this._list.bind(this), function(e){ return e; }); };
+  Ov.prototype.keys = function(){ return iterOver(this._list.bind(this), function(e){ return e.name; }); };
+  Ov.prototype.entries = function(){ return iterOver(this._list.bind(this), function(e){ return [e.name, e]; }); };
+  if (typeof Symbol !== "undefined" && Symbol.asyncIterator) Ov.prototype[Symbol.asyncIterator] = function(){ return this.entries(); };
+  Ov.prototype.queryPermission = function(o){ var h = this.main || this.alt; return h && h.queryPermission ? h.queryPermission(o) : Promise.resolve("granted"); };
+  Ov.prototype.requestPermission = function(o){ var h = this.main || this.alt; return h && h.requestPermission ? h.requestPermission(o) : Promise.resolve("granted"); };
+
+  // An item's job notes ("JN") or shop drawings ("SD") folder -- the stand-in described above, then `sub` folders
+  // (a drawing's folder, "Returned") below it. create: make what is missing (new folders only); without it a folder
+  // that is in neither place is a NotFoundError, as on a real handle. loc: { level, room } when the caller knows
+  // them (else looked up by file name).
+  function docsDir(ph, branch, key, create, sub, loc){
+    var oldSegs = oldDocSegs(branch, key), mainSegs = newDocSegs(branch, key, loc || where(key, ph && ph.name));
+    return Promise.all([tryWalk(ph, mainSegs), DOC_READ_OLD ? tryWalk(ph, oldSegs) : Promise.resolve(null)]).then(function(r){
+      if (!r[0] && !r[1] && !create) throw nfErr(key);
+      var p = Promise.resolve(new Ov(ph, mainSegs, r[0], r[1]));
+      (sub || []).forEach(function(sg){ p = p.then(function(o){ return o.getDirectoryHandle(sg, { create: !!create }); }); });
+      return p;
+    });
+  }
+  // Every item that has a folder (for a scan: "which items have a shop drawing"): the stand-in folders, each named
+  // by its file name, old and new together.
+  function mapPool(list, n, fn){
+    var i = 0, out = [];
+    function worker(){
+      if (i >= list.length) return Promise.resolve();
+      var mine = list[i++];
+      return fn(mine).then(function(v){ if (v) out.push(v); }, function(){}).then(worker);
+    }
+    var ws = [];
+    for (var w = 0; w < Math.min(n, list.length); w++) ws.push(worker());
+    return Promise.all(ws).then(function(){ return out; });
+  }
+  function subdirs(h){ return listHandles(h).then(function(l){ return l.filter(function(e){ return e.kind === "directory"; }); }); }
+  function docsKeys(ph, branch){
+    var found = {}, order = [];
+    function slot(k){ var lk = low(k); if (!found[lk]){ found[lk] = { key: k, mains: [], alt: null }; order.push(lk); } return found[lk]; }
+    var oldP = (DOC_READ_OLD ? tryWalk(ph, ["Project Saves", DOC_OLD[branch]]) : Promise.resolve(null)).then(function(b){ return b ? subdirs(b) : []; }).then(function(ds){
+      ds.forEach(function(d){ slot(d.name).alt = d; });
+    });
+    var newP = tryWalk(ph, ["PDFs", DOC_NEW[branch] || branch]).then(function(b){ return b ? subdirs(b) : []; }).then(function(levels){
+      return mapPool(levels, 3, function(lv){
+        return subdirs(lv).then(function(rooms){
+          return mapPool(rooms, 3, function(rm){
+            return subdirs(rm).then(function(items){
+              items.forEach(function(d){ slot(d.name).mains.push({ h: d, segs: ["PDFs", DOC_NEW[branch] || branch, lv.name, rm.name, d.name] }); });
+              return 1;
+            });
+          });
+        });
+      });
+    });
+    return Promise.all([oldP, newP]).then(function(){
+      return order.map(function(lk){
+        var f = found[lk], m = f.mains[0] || null;
+        if (f.mains.length > 1){ // the same name in two rooms: the one it is in now
+          var w = where(f.key, ph && ph.name), want = w ? newDocSegs(branch, f.key, w) : null;
+          if (want) f.mains.forEach(function(x){ if (x.segs.join("\u0000") === want.join("\u0000")) m = x; });
+        }
+        if (m) return new Ov(ph, m.segs, m.h, f.alt);
+        return new Ov(ph, newDocSegs(branch, f.key, where(f.key, ph && ph.name)), null, f.alt);
+      });
+    });
+  }
+  function docsForget(){ dirMemo = typeof WeakMap === "function" ? new WeakMap() : null; }
+
   window.UtzItemFiles = {
     version: 1, MAX: MAX,
     clean: clean, baseOf: baseOf, valid: valid, assign: assign, register: register, fileKey: fileKey,
-    initials: initials, stamp: stamp, tripleKey: tripleKey,
+    initials: initials, stamp: stamp, tripleKey: tripleKey, roomMeasureKey: roomMeasureKey,
+    levelSeg: levelSeg, roomShort: roomShort, roomSeg: roomSeg, where: where, docPathSegs: docPathSegs,
+    docsDir: docsDir, docsKeys: docsKeys, docsForget: docsForget, isNotFound: isNF,
     _maps: function(){ return maps; }
   };
 })();
@@ -1134,6 +1419,8 @@
   // stand-in folder asked for by key knows its level and its canonical key,
   // and a record file's leading part (long, short or "_hash") finds its item.
   var registry = {}, alias = {}, canonKnown = {}, byShort = {}, byTiny = {}, regVersion = 0;
+  // (2026-10-02) where a remembered key's item is: { level, room, code } (null: never remembered)
+  function whereKey(key){ var r = key ? registry[key] : null; return r ? { level: r.level, room: r.room, code: r.code } : null; }
   function remember(key, level, room, code){
     if (!key) return key;
     var lf = levelFolder(level);
@@ -1833,7 +2120,7 @@
     version: 3,
     ROOT: ROOT, SEP: SEP, BRANCHES: BRANCHES, NEEDS_REL: NEEDS_REL, WIN_FULL: WIN_FULL,
     itemKey: itemKey, nameKey: nameKey, levelFolder: levelFolder, itpKey: itpKey, shortOf: shortOf, leadOf: leadOf, tinyOf: tinyOf, compactBase: compactBase, LEVEL_MAX: LEVEL_MAX,
-    remember: remember, root: root, refresh: refresh, tidy: tidy, countLegacy: countLegacy, pathBudget: pathBudget,
+    remember: remember, where: whereKey, root: root, refresh: refresh, tidy: tidy, countLegacy: countLegacy, pathBudget: pathBudget,
     _registry: registry, _memos: function(){ return memos; }, _probes: probes
   };
 })();
@@ -1849,6 +2136,202 @@
 .utz-change-folder[hidden]{display:none}
 </style>
 <!-- UTZLINE-CHANGE-FOLDER END -->
+<!-- UTZLINE-ADMIN-GATE BEGIN (generated from shared/admin-gate -- don't edit here) -->
+<script>
+/* UTZLINE-ADMIN-GATE BEGIN -- shared/admin-gate/admin-gate.js (inlined into every app that has a Change folder button; edit the shared file, then re-inline) */
+/* (2026-10-02) Changing the Projects folder needs an ADMINISTRATOR's PIN, in every app.
+   Andrew: "to chose another folder you must enter an administrator pin (on any app)" and "Andrew Utz will be the
+   Administrator for now, but possibility to change it later".
+   - Who is an administrator: the names in utzline-admins.json at the Projects root ({"admins":["Andrew Utz", ...]}),
+     or just "Andrew Utz" while that file doesn't exist. Change it later by editing that one file -- no new build.
+   - The PIN is checked against utzline-users.csv (Name,PIN,...) at the Projects root -- the same list the apps sign in with.
+   - Never locks anyone out of a lost folder: if the user list can't be read (no folder / permission lapsed / file gone), or
+     none of the administrators has a PIN in it, the change is allowed -- there is nothing to check against.
+   - Its own little numberpad (4 digits), so it works in apps with no numberpad of their own ($ Summary).
+   UtzAdminGate.guard(getRoot, fn): asks, then runs fn() only on the right PIN.  UtzAdminGate.require(getRoot) -> Promise<bool>. */
+/* UTZLINE PIN (2026-10-02): PINs in utzline-users.csv are stored scrambled ("h1:<salt>:<sha-256>") so the file can't be read for PINs.
+   A plain PIN already in the file still works (compared as-is) and is scrambled the next time an app saves the file.
+   UtzPin.eq(stored, entered) -> bool (a blank stored PIN never matches);  UtzPin.stored(pin) -> what to write to the file;
+   UtzPin.isHashed(s).  Pure ES5 SHA-256 (works on file:// and plain http, where crypto.subtle is missing). */
+(function(){
+  "use strict";
+  if (window.UtzPin) return;
+  var K = [], H0 = [];
+  (function(){
+    var n = 2, found = 0;
+    while (found < 64){
+      var prime = true;
+      for (var d = 2; d * d <= n; d++) if (n % d === 0){ prime = false; break; }
+      if (prime){
+        if (found < 8) H0.push(((Math.pow(n, 1 / 2) % 1) * 4294967296) >>> 0);
+        K.push(((Math.pow(n, 1 / 3) % 1) * 4294967296) >>> 0);
+        found++;
+      }
+      n++;
+    }
+  })();
+  function utf8(s){
+    var out = [], i, c;
+    s = unescape(encodeURIComponent(String(s)));
+    for (i = 0; i < s.length; i++){ c = s.charCodeAt(i); out.push(c); }
+    return out;
+  }
+  function rotr(x, n){ return (x >>> n) | (x << (32 - n)); }
+  function sha256Hex(str){
+    var b = utf8(str), l = b.length * 8, i, j;
+    b.push(0x80);
+    while (b.length % 64 !== 56) b.push(0);
+    for (i = 7; i >= 0; i--) b.push(i >= 4 ? 0 : (l >>> (i * 8)) & 0xff);
+    var h = H0.slice(), w = new Array(64);
+    for (i = 0; i < b.length; i += 64){
+      for (j = 0; j < 16; j++) w[j] = ((b[i + j * 4] << 24) | (b[i + j * 4 + 1] << 16) | (b[i + j * 4 + 2] << 8) | b[i + j * 4 + 3]) >>> 0;
+      for (j = 16; j < 64; j++){
+        var s0 = rotr(w[j - 15], 7) ^ rotr(w[j - 15], 18) ^ (w[j - 15] >>> 3), s1 = rotr(w[j - 2], 17) ^ rotr(w[j - 2], 19) ^ (w[j - 2] >>> 10);
+        w[j] = (w[j - 16] + s0 + w[j - 7] + s1) >>> 0;
+      }
+      var a = h[0], bb = h[1], c = h[2], d = h[3], e = h[4], f = h[5], g = h[6], hh = h[7];
+      for (j = 0; j < 64; j++){
+        var S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25), ch = (e & f) ^ (~e & g), t1 = (hh + S1 + ch + K[j] + w[j]) >>> 0;
+        var S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22), mj = (a & bb) ^ (a & c) ^ (bb & c), t2 = (S0 + mj) >>> 0;
+        hh = g; g = f; f = e; e = (d + t1) >>> 0; d = c; c = bb; bb = a; a = (t1 + t2) >>> 0;
+      }
+      h[0] = (h[0] + a) >>> 0; h[1] = (h[1] + bb) >>> 0; h[2] = (h[2] + c) >>> 0; h[3] = (h[3] + d) >>> 0;
+      h[4] = (h[4] + e) >>> 0; h[5] = (h[5] + f) >>> 0; h[6] = (h[6] + g) >>> 0; h[7] = (h[7] + hh) >>> 0;
+    }
+    var out = "";
+    for (i = 0; i < 8; i++) out += ("00000000" + h[i].toString(16)).slice(-8);
+    return out;
+  }
+  function salt(){
+    var s = "", i;
+    try{ var a = new Uint8Array(8); (window.crypto || window.msCrypto).getRandomValues(a); for (i = 0; i < 8; i++) s += ("0" + a[i].toString(16)).slice(-2); return s; }catch(e){}
+    for (i = 0; i < 16; i++) s += Math.floor(Math.random() * 16).toString(16);
+    return s;
+  }
+  function isHashed(s){ return typeof s === "string" && s.indexOf("h1:") === 0; }
+  function eq(storedPin, entered){
+    var st = String(storedPin == null ? "" : storedPin).trim(), en = String(entered == null ? "" : entered);
+    if (!st) return false;
+    if (isHashed(st)){ var p = st.split(":"); return p.length === 3 && sha256Hex(p[1] + ":" + en) === p[2]; }
+    return st === en;
+  }
+  function stored(pin){
+    var p = String(pin == null ? "" : pin).trim();
+    if (!p || isHashed(p)) return p;
+    var s = salt();
+    return "h1:" + s + ":" + sha256Hex(s + ":" + p);
+  }
+  window.UtzPin = { eq: eq, stored: stored, isHashed: isHashed, _sha256: sha256Hex };
+})();
+(function(){
+  "use strict";
+  if (window.UtzAdminGate) return;
+  var DEFAULT_ADMINS = ["Andrew Utz"], ADMIN_FILE = "utzline-admins.json", USERS_FILE = "utzline-users.csv";
+  var busy = false;
+  function lc(s){ return String(s || "").trim().toLowerCase(); }
+  function readText(root, name){
+    return root.getFileHandle(name, { create: false }).then(function(fh){ return fh.getFile(); }).then(function(f){ return f.text(); });
+  }
+  function parseCsv(text){
+    var rows = [], row = [], cur = "", q = false, i, c;
+    text = String(text || "").replace(/^﻿/, "");
+    for (i = 0; i < text.length; i++){
+      c = text.charAt(i);
+      if (q){ if (c === '"'){ if (text.charAt(i + 1) === '"'){ cur += '"'; i++; } else q = false; } else cur += c; }
+      else if (c === '"') q = true;
+      else if (c === ",") { row.push(cur); cur = ""; }
+      else if (c === "\n" || c === "\r"){ if (c === "\r" && text.charAt(i + 1) === "\n") i++; row.push(cur); cur = ""; rows.push(row); row = []; }
+      else cur += c;
+    }
+    if (cur !== "" || row.length){ row.push(cur); rows.push(row); }
+    return rows;
+  }
+  function readUsers(root){
+    return readText(root, USERS_FILE).then(function(t){
+      var rows = parseCsv(t), start = (rows[0] && lc(rows[0][0]) === "name") ? 1 : 0, out = [];
+      for (var i = start; i < rows.length; i++){ var r = rows[i]; if (r && r[0] && String(r[0]).trim()) out.push({ name: String(r[0]).trim(), pin: String(r[1] || "").trim() }); }
+      return out;
+    });
+  }
+  function readAdmins(root){
+    return readText(root, ADMIN_FILE).then(function(t){
+      var j = JSON.parse(t), a = Array.isArray(j) ? j : (j && j.admins);
+      a = Array.isArray(a) ? a.map(function(x){ return String(x || "").trim(); }).filter(Boolean) : [];
+      return a.length ? a : DEFAULT_ADMINS.slice();
+    }).catch(function(){ return DEFAULT_ADMINS.slice(); });
+  }
+  function injectStyle(){
+    if (document.getElementById("utzAdminPadStyle")) return;
+    var st = document.createElement("style"); st.id = "utzAdminPadStyle";
+    st.textContent = "#utzAdminPad{position:fixed;inset:0;z-index:2147483000;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif}" +
+      "#utzAdminPad .uap-card{background:#1a1a19;color:#fff;border:1px solid #383835;border-radius:14px;padding:20px 22px 18px;width:min(320px,92vw);box-shadow:0 12px 40px rgba(0,0,0,.5);text-align:center}" +
+      "#utzAdminPad h2{margin:0 0 4px;font-size:17px}#utzAdminPad p{margin:0 0 14px;font-size:13px;color:#c3c2b7;line-height:1.4}" +
+      "#utzAdminPad .uap-dots{display:flex;gap:12px;justify-content:center;margin:0 0 14px}#utzAdminPad .uap-dot{width:14px;height:14px;border-radius:50%;border:2px solid #898781}" +
+      "#utzAdminPad .uap-dot.on{background:#fff;border-color:#fff}#utzAdminPad .uap-msg{min-height:18px;margin:-4px 0 8px;font-size:12.5px;color:#ff8f8f}" +
+      "#utzAdminPad .uap-keys{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}" +
+      "#utzAdminPad button{font:inherit;font-size:20px;padding:13px 0;border-radius:10px;border:1px solid #383835;background:#2c2c2a;color:#fff;cursor:pointer;touch-action:manipulation}" +
+      "#utzAdminPad button:active{background:#383835}#utzAdminPad .uap-small{font-size:13px;color:#c3c2b7}" +
+      "#utzAdminPad.uap-shake .uap-card{animation:uapShake .35s}@keyframes uapShake{20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}";
+    document.head.appendChild(st);
+  }
+  // The numberpad: resolves true on a PIN that verify() accepts, false when cancelled.
+  function pad(subtitle, verify){
+    injectStyle();
+    return new Promise(function(resolve){
+      var el = document.createElement("div"); el.id = "utzAdminPad"; el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true");
+      el.innerHTML = '<div class="uap-card"><h2>Administrator PIN</h2><p></p><div class="uap-dots"><span class="uap-dot"></span><span class="uap-dot"></span><span class="uap-dot"></span><span class="uap-dot"></span></div><div class="uap-msg"></div><div class="uap-keys"></div></div>';
+      el.querySelector("p").textContent = subtitle;
+      var keys = el.querySelector(".uap-keys"), dots = el.querySelectorAll(".uap-dot"), msg = el.querySelector(".uap-msg"), entered = "", checking = false;
+      function paint(){ for (var i = 0; i < 4; i++) dots[i].className = "uap-dot" + (i < entered.length ? " on" : ""); }
+      function done(v){ document.removeEventListener("keydown", onKey, true); if (el.parentNode) el.parentNode.removeChild(el); resolve(v); }
+      function press(d){
+        if (checking) return;
+        if (d === "back"){ entered = entered.slice(0, -1); msg.textContent = ""; paint(); return; }
+        if (entered.length >= 4) return;
+        entered += d; msg.textContent = ""; paint();
+        if (entered.length === 4){
+          checking = true;
+          Promise.resolve(verify(entered)).then(function(ok){
+            if (ok){ done(true); return; }
+            checking = false; entered = ""; paint(); msg.textContent = "Wrong PIN — try again.";
+            el.classList.remove("uap-shake"); void el.offsetWidth; el.classList.add("uap-shake");
+          }, function(){ checking = false; entered = ""; paint(); msg.textContent = "Couldn't check that — try again."; });
+        }
+      }
+      function onKey(ev){
+        if (ev.key >= "0" && ev.key <= "9"){ ev.preventDefault(); ev.stopPropagation(); press(ev.key); }
+        else if (ev.key === "Backspace"){ ev.preventDefault(); ev.stopPropagation(); press("back"); }
+        else if (ev.key === "Escape"){ ev.preventDefault(); ev.stopPropagation(); done(false); }
+      }
+      function mk(label, d, cls){ var b = document.createElement("button"); b.type = "button"; b.textContent = label; if (cls) b.className = cls; b.setAttribute("data-k", d); b.addEventListener("click", function(){ if (d === "cancel") done(false); else press(d); }); keys.appendChild(b); }
+      ["1","2","3","4","5","6","7","8","9"].forEach(function(d){ mk(d, d); });
+      mk("Cancel", "cancel", "uap-small"); mk("0", "0"); mk("⌫", "back", "uap-small");
+      document.addEventListener("keydown", onKey, true);
+      document.body.appendChild(el);
+    });
+  }
+  function requireAdmin(getRoot, why){
+    var root = null;
+    try { root = getRoot && getRoot(); } catch (e) { root = null; }
+    if (!root) return Promise.resolve(true); // no folder yet: nothing to protect
+    return Promise.all([readUsers(root).then(function(u){ return u; }, function(){ return null; }), readAdmins(root)]).then(function(res){
+      var users = res[0], admins = res[1].map(lc);
+      if (!users || !users.length) return true;
+      var adminPins = users.filter(function(u){ return admins.indexOf(lc(u.name)) !== -1 && u.pin; }).map(function(u){ return u.pin; });
+      if (!adminPins.length) return true;
+      return pad(why || "Changing the Projects folder needs an administrator's PIN.", function(pin){ return adminPins.some(function(h){ return window.UtzPin.eq(h, pin); }); });
+    }, function(){ return true; });
+  }
+  function guard(getRoot, fn, why){
+    if (busy) return;
+    busy = true;
+    requireAdmin(getRoot, why).then(function(ok){ busy = false; if (ok) fn(); }, function(){ busy = false; fn(); });
+  }
+  window.UtzAdminGate = { require: requireAdmin, guard: guard, DEFAULT_ADMINS: DEFAULT_ADMINS, ADMIN_FILE: ADMIN_FILE, _parseCsv: parseCsv };
+})();
+/* UTZLINE-ADMIN-GATE END */
+</script>
+<!-- UTZLINE-ADMIN-GATE END -->
 </head>
 <body>
 
@@ -1924,7 +2407,7 @@
 
     <div class="card">
       <h2 class="section-title">Monthly summary by project</h2>
-      <p class="sub" style="margin:0 0 10px;font-size:12px;">Each project's own Forecast / Delivered / Installed value, month by month. Open a project for the full interactive chart, table and export.</p>
+      <p class="sub" style="margin:0 0 10px;font-size:12px;">Each project's own Forecast / Delivered / Installed value, month by month, in the project's own colour (lighter = forecast, solid = installed). Open a project for the full interactive chart, table and export.</p>
       <div class="mini-chart-grid" id="allProjectMiniGrid"></div>
     </div>
 
@@ -2014,7 +2497,7 @@
   </section>
 
 </main>
-<footer class="app-foot">UTZLINE $ Summary — RC 1.0 (v8), read live from your Projects folder</footer>
+<footer class="app-foot">UTZLINE $ Summary — RC 1.0 (v17), read live from your Projects folder</footer>
 
 <script src="./vendor/xlsx.full.min.js"></script>
 <script>
@@ -2135,7 +2618,7 @@
      backups, kept directly in the main Projects folder -- isn't a project,
      so it's left out of the project list (the same one-line rule is in
      every app in the family). */
-  function isReservedRootFolderName(name){ return String(name || "").trim().toLowerCase() === "schedule backups" || String(name || "").trim().toLowerCase() === "logos"; }
+  function isReservedRootFolderName(name){ return String(name || "").trim().toLowerCase() === "schedule backups" || String(name || "").trim().toLowerCase() === "logos" || String(name || "").trim().toLowerCase() === "project archive" || String(name || "").trim().toLowerCase() === "project activity"; }
   function listExistingProjects(rootHandle){
     return listSubdirNames(rootHandle).then(function(names){ return names.filter(function(n){ return !isReservedRootFolderName(n); }); });
   }
@@ -2148,7 +2631,8 @@
         no: String(parsed.no || ""),
         name: String(parsed.name || ""),
         contractor: String(parsed.contractor || ""),
-        projectManager: String(parsed.projectManager || "")
+        projectManager: String(parsed.projectManager || ""),
+        color: /^#[0-9a-f]{6}$/i.test(String(parsed.color || "")) ? String(parsed.color) : "" // (v17) a colour another app stored for the project, if any
       };
     }).then(function(res){ return res.found ? res.value : null; });
   }
@@ -2310,10 +2794,10 @@
   }
   function readFirstShopDrawingDates(projectHandle, rawItems){
     var byKey = {};
-    return projectHandle.getDirectoryHandle("Project Saves", { create: false }).then(function(ps){ return ps.getDirectoryHandle("Shop Drawings", { create: false }); }).then(function(sd){
+    return UtzItemFiles.docsKeys(projectHandle, "SD").then(function(itemDirsAll){ // (2026-10-02) PDFs\SD\<Level>\<Room>\<item>
       var wanted = {};
       rawItems.forEach(function(it){ wanted[UtzItemFiles.fileKey(it.level, it.room, it.joineryId, projectHandle.name)] = (it.level || "") + "\u0001" + (it.room || "") + "\u0001" + (it.joineryId || ""); }); // (2026-10-01, code-only file names) the drawing folder is named by the item's file name (its code)
-      return listDirEntries(sd).then(function(itemDirs){
+      return Promise.resolve(itemDirsAll).then(function(itemDirs){
         var p = Promise.resolve();
         itemDirs.forEach(function(idir){
           if (idir.kind !== "directory" || !wanted[idir.name]) return;
@@ -2379,6 +2863,7 @@
         name: (meta && meta.name) || folderName,
         contractor: (meta && meta.contractor) || "",
         projectManager: (meta && meta.projectManager) || "",
+        metaColor: (meta && meta.color) || "",
         items: items
       };
     });
@@ -2482,18 +2967,22 @@
     });
   });
   chooseDifferentRootBtn.addEventListener("click", function(){
+    UtzAdminGate.guard(function(){ return rootHandle; }, function(){
     pickRootFolder().catch(function(err){
       if (err && err.name === "AbortError") return;
       console.error("Choose Projects folder failed:", err);
       showToast(folderPickerErrorMessage(err));
     });
   });
+  });
   reconnectChooseDifferentBtn.addEventListener("click", function(){
+    UtzAdminGate.guard(function(){ return rootHandle; }, function(){
     pickRootFolder().catch(function(err){
       if (err && err.name === "AbortError") return;
       console.error("Choose Projects folder failed:", err);
       showToast(folderPickerErrorMessage(err));
     });
+  });
   });
   reconnectBtn.addEventListener("click", function(){
     if (!rootHandle) return;
@@ -2572,7 +3061,34 @@
   var PROJECTS = [];
   var PROJECT_AGG = {}; // folderName -> {buckets, totals}
   var COMPANY_BUCKETS = emptyMonthlyBuckets();
+  /* (v17, 2026-10-02) PROJECT COLOURS. Andrew: "differnt projects to inherit different colours (keeps that colour for the
+     life of the project)" and "then the bars here get shaded the same". This app is read-only (it never writes the Projects
+     folder), so a project's colour is chosen here once and REMEMBERED on this device: the first time a project is seen it takes
+     the least-used palette colour (projects ordered by job number, so two devices that see the same projects start with the
+     same colours); after that it never changes, whatever is added, finished or re-sorted (colour follows the project, never its
+     rank). A colour another app stored in the project's project-meta.json ("color": "#rrggbb") wins when there is one. The
+     palette is the validated 8-hue dark categorical set (slot order rotated so the first project isn't the company-wide blue);
+     past 8 projects colours are reused, least-used first -- the project's name is always beside its colour. */
+  var PROJECT_PALETTE = ["#c98500", "#d55181", "#008300", "#9085e9", "#e66767", "#3987e5", "#d95926", "#199e70"];
+  var PROJECT_COLOR_KEY = "utzline-dollar-project-colours-v1";
+  function loadColourMap(){ try{ var m = JSON.parse(localStorage.getItem(PROJECT_COLOR_KEY) || "{}"); return (m && typeof m === "object") ? m : {}; }catch(e){ return {}; } }
+  function saveColourMap(m){ try{ localStorage.setItem(PROJECT_COLOR_KEY, JSON.stringify(m)); }catch(e){} }
+  function assignProjectColours(){
+    var map = loadColourMap(), dirty = false;
+    var counts = PROJECT_PALETTE.map(function(){ return 0; });
+    Object.keys(map).forEach(function(k){ var i = map[k]; if (typeof i === "number" && i >= 0 && i < counts.length) counts[i]++; });
+    var todo = PROJECTS.filter(function(p){ return !p.metaColor && !(typeof map[p.folderName] === "number" && map[p.folderName] >= 0 && map[p.folderName] < PROJECT_PALETTE.length); });
+    todo.sort(function(a, b){ return String(a.no || "").localeCompare(String(b.no || ""), undefined, { numeric: true }) || String(a.folderName).localeCompare(String(b.folderName), undefined, { numeric: true }); });
+    todo.forEach(function(p){
+      var best = 0;
+      for (var i = 1; i < counts.length; i++) if (counts[i] < counts[best]) best = i;
+      map[p.folderName] = best; counts[best]++; dirty = true;
+    });
+    if (dirty) saveColourMap(map);
+    PROJECTS.forEach(function(p){ p.color = p.metaColor || PROJECT_PALETTE[map[p.folderName]] || PROJECT_PALETTE[0]; });
+  }
   function rebuildAggregates(){
+    assignProjectColours();
     PROJECT_AGG = {};
     PROJECTS.forEach(function(p){ PROJECT_AGG[p.folderName] = aggregateProject(p); });
     COMPANY_BUCKETS = emptyMonthlyBuckets();
@@ -2705,6 +3221,8 @@
   // "Outstanding forecast" (not just "Forecast") specifically so it reads
   // as a different, narrower quantity than the plain Forecast figure shown
   // in the stat tiles and the monthly table above/below this chart.
+  // (v17) per-project cards: the bars take the project's colour; lighter = further from done (forecast lightest, installed solid)
+  var PROJECT_SHADE = { forecast: 0.4, shopSent: 0.55, delivered: 0.75, installed: 1 };
   function renderBarChart(wrapEl, buckets, opts){
     opts = opts || {};
     var compact = !!opts.compact;
@@ -2812,7 +3330,7 @@
           if (bh < 0) bh = 0;
           svg.appendChild(svgEl("rect", {
             x:bx.toFixed(1), y:by.toFixed(1), width:barW.toFixed(1), height:bh.toFixed(1),
-            rx:"3", ry:"3", fill:s.color
+            rx:"3", ry:"3", fill:(opts.projectColor || s.color), opacity:(opts.projectColor ? String(PROJECT_SHADE[s.key] || 1) : "1")
           }));
         });
         groupBounds.push({ x0: padL + i*groupW, x1: padL + (i+1)*groupW });
@@ -2906,7 +3424,7 @@
     if (legendEl){
       legendEl.innerHTML =
         '<div class="legend-item"><span class="legend-key fill" style="background:var(--series-forecast)"></span><span>Company-wide forecast</span></div>' +
-        '<div class="legend-item"><span class="legend-key fill" style="background:var(--accent)"></span><span>Individual project (hover for name)</span></div>';
+        '<div class="legend-item"><span class="legend-key fill" style="background:linear-gradient(90deg,' + PROJECT_PALETTE.slice(0, 4).join(",") + ')"></span><span>Each project in its own colour (hover for name)</span></div>';
     }
     var W = 960, H = 320, padL = 56, padR = 16, padT = 16, padB = 34;
     var plotW = W - padL - padR, plotH = H - padT - padB;
@@ -2924,7 +3442,7 @@
       PROJECTS.forEach(function(p){
         var agg = PROJECT_AGG[p.folderName];
         var val = agg ? agg.buckets[mo.key].forecast : 0;
-        if (val > 0) rows.push({ name: (p.no ? p.no + " — " : "") + p.name, value: val });
+        if (val > 0) rows.push({ name: (p.no ? p.no + " — " : "") + p.name, value: val, color: p.color });
       });
       rows.sort(function(a, b){ return b.value - a.value; });
       return rows;
@@ -2986,7 +3504,7 @@
           if (bh < 0) bh = 0;
           svg.appendChild(svgEl("rect", {
             x:bx.toFixed(1), y:by.toFixed(1), width:eachW.toFixed(1), height:bh.toFixed(1),
-            rx:"2", ry:"2", fill:"var(--accent)", stroke:"var(--chart-surface)", "stroke-width":"1"
+            rx:"2", ry:"2", fill:row.color || "var(--accent)", stroke:"var(--chart-surface)", "stroke-width":"1"
           }));
         });
       }
@@ -3012,10 +3530,10 @@
       var rest = rows.slice(MAX_TOOLTIP_ROWS);
       var restTotal = rest.reduce(function(s, r){ return s + r.value; }, 0);
       var html = shown.map(function(r){
-        return '<div class="tt-row"><span class="k fillkey" style="background:var(--accent)"></span><span>'+escapeHtml(r.name)+'</span><span class="v">'+money(r.value)+'</span></div>';
+        return '<div class="tt-row"><span class="k fillkey" style="background:'+(r.color || "var(--accent)")+'"></span><span>'+escapeHtml(r.name)+'</span><span class="v">'+money(r.value)+'</span></div>';
       }).join("");
       if (rest.length){
-        html += '<div class="tt-row"><span class="k fillkey" style="background:var(--accent)"></span><span>+'+rest.length+' more project'+(rest.length===1?"":"s")+'</span><span class="v">'+money(restTotal)+'</span></div>';
+        html += '<div class="tt-row"><span class="k fillkey" style="background:var(--chart-muted)"></span><span>+'+rest.length+' more project'+(rest.length===1?"":"s")+'</span><span class="v">'+money(restTotal)+'</span></div>';
       }
       if (!rows.length){
         html = '<div class="tt-row"><span>No scheduled projects this month</span></div>';
@@ -3137,7 +3655,7 @@
       btn.className = "list-item";
       btn.innerHTML =
         '<div class="li-main">' +
-          '<span class="li-title">' + escapeHtml((p.no ? p.no + " — " : "") + p.name) + '</span>' +
+          '<span class="li-title"><span class="proj-dot" style="background:' + p.color + '"></span>' + escapeHtml((p.no ? p.no + " — " : "") + p.name) + '</span>' +
           '<span class="li-sub">Builder: ' + escapeHtml(p.contractor || "—") + ' &nbsp;·&nbsp; PM: ' + escapeHtml(p.projectManager || "—") + '</span>' +
           '<span class="li-sub li-forecast3">Next 3 months forecast: ' + projectNext3MonthsLine(agg) + '</span>' +
         '</div>' +
@@ -3190,10 +3708,11 @@
       var agg = PROJECT_AGG[p.folderName];
       var card = document.createElement("div");
       card.className = "mini-chart-card";
+      card.style.borderTop = "3px solid " + p.color;
       var head = document.createElement("div");
       head.className = "mini-chart-head";
       head.innerHTML =
-        '<span class="name">' + escapeHtml((p.no ? p.no + " — " : "") + p.name) + '</span>' +
+        '<span class="name"><span class="proj-dot" style="background:' + p.color + '"></span>' + escapeHtml((p.no ? p.no + " — " : "") + p.name) + '</span>' +
         '<span class="value">' + money(agg.totals.contract) + '</span>';
       card.appendChild(head);
       var chartWrap = document.createElement("div");
@@ -3211,7 +3730,7 @@
       openBtn.addEventListener("click", function(){ openProject(p.folderName); });
       card.appendChild(openBtn);
       grid.appendChild(card);
-      renderBarChart(chartWrap, agg.buckets, { compact: true });
+      renderBarChart(chartWrap, agg.buckets, { compact: true, projectColor: p.color });
     });
   }
 
@@ -3304,6 +3823,8 @@
     var agg = PROJECT_AGG[folderName];
 
     document.getElementById("projTitle").textContent = (p.no ? p.no + " — " : "") + p.name;
+    document.getElementById("projTitle").style.borderLeft = "6px solid " + p.color; // (v17) the project's colour
+    document.getElementById("projTitle").style.paddingLeft = "10px";
     if (window.UtzBuilders) UtzBuilders.mount(document.getElementById("projTitle"), rootHandle, p.contractor || ""); // (2026-10-02) builder logo, far right of the top bar
     document.getElementById("projSub").textContent = "Builder: " + (p.contractor || "—") + "  ·  Project manager: " + (p.projectManager || "—");
 
