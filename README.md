@@ -1,6 +1,10 @@
 # UTZLINE $ Summary — installable app
 
-**Current version: v19 (RC 1.0)** (its own independent version line, separate from every other app in the family — bump this line, and add a dated entry below, every time a new build ships.)
+**Current version: v22 (RC 1.0)** (its own independent version line, separate from every other app in the family — bump this line, and add a dated entry below, every time a new build ships.)
+
+**v21 (2026-10-04): item numbers, everything split by room / item.** Shared item-naming code updated. Every joinery item has its own 3-digit number (001, 002 ... given once by Projects, never reused) and it follows the code in the item's file name ("JG.33.1 - 001"). Every save is split by level, room and item, even when a room has only one item. Fresh install: no older folders are read (Andrew: *"I DONT WANT BACKWRDS COMPATIBILITY. i am starting brand new"*).
+
+**v20 (2026-10-04): in-app PDF viewer.** PDFs open inside the app on phones and tablets (Zoom, Share, Save, Close; the Back button closes it and stays on the screen).
 
 **v19 (2026-10-02): PINs scrambled, blank PIN = choose a new one.** PINs in `utzline-users.csv` are saved scrambled (`h1:<salt>:<sha-256>`), so the file no longer shows them. A plain PIN already in the file still works and is scrambled the next time an app saves the file. A BLANK PIN cell means reset: the next sign-in as that name asks for a new PIN (twice). Update every device before anyone adds a name: an older app cannot read a scrambled PIN. A 4-digit PIN can still be guessed from the file, so keep the file private in OneDrive too.
 
