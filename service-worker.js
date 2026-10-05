@@ -96,7 +96,7 @@ var ICON_VERSION = "v1";
 // v8 (2026-09-30): RC 1.0 -- shop drawings = 10% in the month they were sent, day / night mode.
 // v9 (2026-10-01): RC 1.0 -- Windows' 260-character path limit: shorter record names in the event store (see README)
 // v13 (2026-10-02): RC 1.0 -- builder logo far right of the top bar, logos folder, reversed Machined, dark-mode controls.
-var CACHE_NAME = "utzline-dollar-summary-cache-v22";
+var CACHE_NAME = "utzline-dollar-summary-cache-v25";
 
 var PRECACHE_URLS = [
   "./",

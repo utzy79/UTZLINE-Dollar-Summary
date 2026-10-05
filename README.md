@@ -1,6 +1,6 @@
 # UTZLINE $ Summary — installable app
 
-**Current version: v22 (RC 1.0)** (its own independent version line, separate from every other app in the family — bump this line, and add a dated entry below, every time a new build ships.)
+**Current version: v25 (RC 1.0)** (its own independent version line, separate from every other app in the family — bump this line, and add a dated entry below, every time a new build ships.)
 
 **v21 (2026-10-04): item numbers, everything split by room / item.** Shared item-naming code updated. Every joinery item has its own 3-digit number (001, 002 ... given once by Projects, never reused) and it follows the code in the item's file name ("JG.33.1 - 001"). Every save is split by level, room and item, even when a room has only one item. Fresh install: no older folders are read (Andrew: *"I DONT WANT BACKWRDS COMPATIBILITY. i am starting brand new"*).
 
