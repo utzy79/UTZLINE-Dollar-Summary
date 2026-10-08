@@ -1,6 +1,16 @@
 # UTZLINE $ Summary — installable app
 
-**Current version: v25 (RC 1.0)** (its own independent version line, separate from every other app in the family — bump this line, and add a dated entry below, every time a new build ships.)
+**Excel exports (2026-10-06):** both *Export … to Excel* buttons now make a styled workbook that matches the register PDFs -- the shared header (company logo, the project's builder logo, the UTZLINE mark, title with a rule, project line, Printed date), a dark table header row, money as `$#,##0`, a bold total row. ExcelJS (`exceljs.min.js`, loaded only on export) replaces SheetJS, which also stops a ~900 KB script loading with every page.
+
+**Current version: v31 (RC 1.0)** (its own independent version line, separate from every other app in the family — bump this line, and add a dated entry below, every time a new build ships.)
+
+**v28 (2026-10-07):** **Sign in.** The $ Summary now asks who is using it, like every other UTZLINE app: pick your name, then your PIN. Andrew: "dollar summary needs login also" / "admin can pick whos name sees the finance" -- a name is listed here only if an administrator ticked **$ Summary (finance)** for it (or for its department) in the Users screen (the **Users** button beside Change folder, administrator PIN); administrators always see it. A name with no permission is signed out with "No access to this app. Ask an administrator". The permissions only decide whose name signs in -- the finance figures come from the project files in the Projects folder, so the folder itself should still only be shared with the right people.
+
+**v27 (2026-10-06):** charts light in day mode, ◀ Today ▶ through the months (details below).
+
+**v27 — charts in day mode, and back through the months.** Andrew: *"make these charts go to light mode, currently they stay black"* and *"the charts should be able to go back through the history, left / right arrow style"*. The chart cards (company-wide, project, the small per-project charts) follow the theme now — white in day mode, dark in night mode. Both big charts have ◀ / Today / ▶ above them: each step moves the 12-month window 3 months earlier or later (the breakdown tables and the Excel month picker follow the same window); the "this month / next month" tiles and the 3-month line on each project button always stay on today.
+
+**v26 (2026-10-06):** what is already logged (shop drawing 10%, deposits paid before delivery) comes off the forecast still to come; Deposit % and Deposit $ columns (set in UTZLINE Projects: Edit item).
 
 **v21 (2026-10-04): item numbers, everything split by room / item.** Shared item-naming code updated. Every joinery item has its own 3-digit number (001, 002 ... given once by Projects, never reused) and it follows the code in the item's file name ("JG.33.1 - 001"). Every save is split by level, room and item, even when a room has only one item. Fresh install: no older folders are read (Andrew: *"I DONT WANT BACKWRDS COMPATIBILITY. i am starting brand new"*).
 
