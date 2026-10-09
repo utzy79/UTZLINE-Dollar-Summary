@@ -2,7 +2,7 @@
 
 **Excel exports (2026-10-06):** both *Export … to Excel* buttons now make a styled workbook that matches the register PDFs -- the shared header (company logo, the project's builder logo, the UTZLINE mark, title with a rule, project line, Printed date), a dark table header row, money as `$#,##0`, a bold total row. ExcelJS (`exceljs.min.js`, loaded only on export) replaces SheetJS, which also stops a ~900 KB script loading with every page.
 
-**Current version: v31 (RC 1.0)** (its own independent version line, separate from every other app in the family — bump this line, and add a dated entry below, every time a new build ships.)
+**Current version: v32 (RC 1.0)** (its own independent version line, separate from every other app in the family — bump this line, and add a dated entry below, every time a new build ships.)
 
 **v28 (2026-10-07):** **Sign in.** The $ Summary now asks who is using it, like every other UTZLINE app: pick your name, then your PIN. Andrew: "dollar summary needs login also" / "admin can pick whos name sees the finance" -- a name is listed here only if an administrator ticked **$ Summary (finance)** for it (or for its department) in the Users screen (the **Users** button beside Change folder, administrator PIN); administrators always see it. A name with no permission is signed out with "No access to this app. Ask an administrator". The permissions only decide whose name signs in -- the finance figures come from the project files in the Projects folder, so the folder itself should still only be shared with the right people.
 
